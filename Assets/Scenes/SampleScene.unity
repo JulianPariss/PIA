@@ -265,7 +265,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -0}
-  m_LocalScale: {x: 5.912192, y: 5.912192, z: 5.912192}
+  m_LocalScale: {x: 34.76403, y: 14.795851, z: 23.581856}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -1071,13 +1071,17 @@ PrefabInstance:
       propertyPath: m_Name
       value: Hunter (0)
       objectReference: {fileID: 0}
+    - target: {fileID: 1310484037213767743, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: maxSpeed
+      value: 7
+      objectReference: {fileID: 0}
     - target: {fileID: 2465193567922046072, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.3
       objectReference: {fileID: 0}
     - target: {fileID: 2465193567922046072, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.5
+      value: 0.486
       objectReference: {fileID: 0}
     - target: {fileID: 2465193567922046072, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1110,6 +1114,18 @@ PrefabInstance:
     - target: {fileID: 2465193567922046072, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: TBA
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: poiSpawnInterval
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: RangeAttackRadius
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: waypoints.Array.size

@@ -156,6 +156,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HunterFSM
   currentStateName: None
+  minStateDuration: 0.8
 --- !u!114 &1310484037213767743
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -174,6 +175,7 @@ MonoBehaviour:
   velocity: {x: 0, y: 0, z: 0}
   rotationSpeed: 10
   lockRotationToY: 1
+  lockMovementToXZ: 1
 --- !u!114 &5045112830788790895
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -189,9 +191,11 @@ MonoBehaviour:
   TBA: 1.5
   lastAttackTime: -999
   RangeAttackRadius: 10
-  MeleeAttackRadius: 2.5
+  MeleeAttackRadius: 4.5
   waypoints: []
   poiPrefab: {fileID: 8484664798431356004, guid: 4e5903da08eeb864bbafaedcfa6db3b3, type: 3}
   poiPrefabs: []
+  poiSpawnInterval: 5
+  poiTimer: 0
   targetTag: Boid
   visionRadius: 15
