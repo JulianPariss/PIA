@@ -93,8 +93,7 @@ public class Boid : SteeringAgent
     {
         if (isRespawning)
         {
-            velocity = Vector3.zero;
-            acceleration = Vector3.zero;
+            ResetMotion();
             respawnTimer += Time.deltaTime;
             if (respawnTimer >= respawnDelay)
             {
@@ -105,8 +104,7 @@ public class Boid : SteeringAgent
 
         if (isDead)
         {
-            velocity = Vector3.zero;
-            acceleration = Vector3.zero;
+            ResetMotion();
             return;
         }
 
@@ -161,15 +159,11 @@ public class Boid : SteeringAgent
 
             if (hunterAgent != null)
             {
-                hunterVelocity = hunterAgent.velocity;
+                hunterVelocity = hunterAgent.Velocity;
             }
             else if (hunterCollider.attachedRigidbody != null)
             {
-                #if UNITY_6000_0_OR_NEWER
                 hunterVelocity = hunterCollider.attachedRigidbody.linearVelocity;
-                #else
-                hunterVelocity = hunterCollider.attachedRigidbody.velocity;
-                #endif
             }
 
             Vector3 hunterTargetPos = hunterCollider.transform.position;
@@ -189,13 +183,12 @@ public class Boid : SteeringAgent
             float distToPOI = Vector3.Distance(transform.position, targetPOI.transform.position);
             if (distToPOI <= poiInteractionRadius)
             {
-                velocity = Vector3.zero;
-                acceleration = Vector3.zero;
+                ResetMotion();
                 Vector3 toPOI = targetPOI.transform.position - transform.position;
                 toPOI.y = 0f;
                 if (toPOI.sqrMagnitude > 0.001f)
                 {
-                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toPOI.normalized), rotationSpeed * Time.deltaTime);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toPOI.normalized), RotationSpeed * Time.deltaTime);
                 }
                 InteractWithPOI(targetPOI);
                 return;
@@ -230,7 +223,7 @@ public class Boid : SteeringAgent
         }
         else if (flockNeighbors.Count == 0)
         {
-            velocity = Vector3.MoveTowards(velocity, velocity.normalized * (maxSpeed * 0.5f), 2f * Time.deltaTime);
+            Stop();
             Vector3 gentleReturn = SteeringBehaviors.Seek(this, spawnAreaCenter);
             gentleReturn.y = 0f;
             totalForce += gentleReturn * (boundaryWeight * 0.3f);
@@ -291,22 +284,7 @@ public class Boid : SteeringAgent
 
         isDead = true;
         currentHealth = 0f;
-        velocity = Vector3.zero;
-        acceleration = Vector3.zero;
-
-        if (TryGetComponent<Rigidbody>(out var rb))
-        {
-            if (!rb.isKinematic)
-            {
-                #if UNITY_6000_0_OR_NEWER
-                rb.linearVelocity = Vector3.zero;
-                #else
-                rb.velocity = Vector3.zero;
-                #endif
-                rb.angularVelocity = Vector3.zero;
-            }
-            rb.isKinematic = true;
-        }
+        ResetMotion();
 
         if (meshRenderers != null)
         {
@@ -332,19 +310,7 @@ public class Boid : SteeringAgent
         isRespawning = false;
         currentHealth = maxHealth;
         isDead = false;
-        velocity = Vector3.zero;
-        acceleration = Vector3.zero;
-
-        if (TryGetComponent<Rigidbody>(out var rb))
-        {
-            rb.isKinematic = false;
-            #if UNITY_6000_0_OR_NEWER
-            rb.linearVelocity = Vector3.zero;
-            #else
-            rb.velocity = Vector3.zero;
-            #endif
-            rb.angularVelocity = Vector3.zero;
-        }
+        ResetMotion();
 
         Vector3 randomOffset = new Vector3(
             Random.Range(-spawnAreaSize.x * 0.5f, spawnAreaSize.x * 0.5f),
@@ -393,15 +359,15 @@ public class Boid : SteeringAgent
         Vector3 averageVelocity = Vector3.zero;
         for (int i = 0; i < neighbors.Count; i++)
         {
-            averageVelocity += neighbors[i].velocity;
+            averageVelocity += neighbors[i].Velocity;
         }
         averageVelocity /= neighbors.Count;
         averageVelocity.y = 0f;
         if (averageVelocity.sqrMagnitude < 0.001f) return Vector3.zero;
-        Vector3 desiredVelocity = averageVelocity.normalized * maxSpeed;
-        Vector3 steeringForce = desiredVelocity - velocity;
+        Vector3 desiredVelocity = averageVelocity.normalized * MaxSpeed;
+        Vector3 steeringForce = desiredVelocity - Velocity;
         steeringForce.y = 0f;
-        return Vector3.ClampMagnitude(steeringForce, maxForce);
+        return Vector3.ClampMagnitude(steeringForce, MaxSteering);
     }
 
     private Vector3 CalculateCohesion(List<SteeringAgent> neighbors)
@@ -416,10 +382,10 @@ public class Boid : SteeringAgent
         Vector3 toCenter = centerOfMass - transform.position;
         toCenter.y = 0f;
         if (toCenter.sqrMagnitude < 0.001f) return Vector3.zero;
-        Vector3 desiredVelocity = toCenter.normalized * maxSpeed;
-        Vector3 steeringForce = desiredVelocity - velocity;
+        Vector3 desiredVelocity = toCenter.normalized * MaxSpeed;
+        Vector3 steeringForce = desiredVelocity - Velocity;
         steeringForce.y = 0f;
-        return Vector3.ClampMagnitude(steeringForce, maxForce);
+        return Vector3.ClampMagnitude(steeringForce, MaxSteering);
     }
 
     private Vector3 CalculateSeparation(List<SteeringAgent> neighbors)
@@ -441,10 +407,10 @@ public class Boid : SteeringAgent
         if (count == 0 || repulsionVector.sqrMagnitude < 0.001f) return Vector3.zero;
         repulsionVector /= count;
         repulsionVector.y = 0f;
-        Vector3 desiredVelocity = repulsionVector.normalized * maxSpeed;
-        Vector3 steeringForce = desiredVelocity - velocity;
+        Vector3 desiredVelocity = repulsionVector.normalized * MaxSpeed;
+        Vector3 steeringForce = desiredVelocity - Velocity;
         steeringForce.y = 0f;
-        return Vector3.ClampMagnitude(steeringForce, maxForce);
+        return Vector3.ClampMagnitude(steeringForce, MaxSteering);
     }
 
     private void OnDrawGizmos()
