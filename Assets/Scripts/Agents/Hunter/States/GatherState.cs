@@ -51,7 +51,7 @@ public class GatherState : IState
             return;
         }
 
-        hunter.Agent.velocity = Vector3.MoveTowards(hunter.Agent.velocity, Vector3.zero, hunter.Agent.maxSpeed * 3f * Time.deltaTime);
+        hunter.Agent.Stop();
         gatherTimer += Time.deltaTime;
 
         if (gatherTimer >= gatherDuration)
