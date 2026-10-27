@@ -27,6 +27,10 @@ public class PointOfInterest : MonoBehaviour
         {
             health.OnDied += HandleDied;
         }
+        if (!TryGetComponent<WorldHealthBar>(out _))
+        {
+            gameObject.AddComponent<WorldHealthBar>();
+        }
     }
 
     private void OnDestroy()

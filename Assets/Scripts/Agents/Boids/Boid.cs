@@ -2,10 +2,13 @@ using System;
 using UnityEngine;
 
 public enum BoidLifeState { Alive, Dead, Collected }
+
 /// <summary>
 /// Orquestador del agente autónomo Boid. Coordina sensores, salud, flocking y ciclo de vida.
+/// Su apariencia y feedback visual están desacoplados en el componente BoidVisuals.
 /// </summary>
 [RequireComponent(typeof(Health), typeof(FlockingBehaviour), typeof(BoidRespawner))]
+[RequireComponent(typeof(BoidVisuals))]
 public class Boid : SteeringAgent
 {
     [Header("Referencias")]
@@ -14,13 +17,15 @@ public class Boid : SteeringAgent
     [SerializeField] private BoidRespawner respawner;
     [SerializeField] private AgentSensor sensor;
     [SerializeField] private SimulationBounds bounds;
+
     [Header("POI y Pesos")]
     [SerializeField] private float poiInteractionRadius = 1.5f, poiSlowingRadius = 3.5f, poiDamageAmount = 15f, poiDamageInterval = 1f;
     [SerializeField] private float evadeWeight = 2.5f, poiWeight = 2f, boundaryWeight = 1.5f;
+
     private BoidLifeState lifeState = BoidLifeState.Alive;
     private float lastPOIDamageTime;
-    private Renderer[] meshRenderers;
-    private Color originalColor = Color.white;
+
+    public bool IsEvading { get; private set; }
     public BoidLifeState LifeState => lifeState;
     public bool IsAlive => lifeState == BoidLifeState.Alive;
     public bool IsCollectable => lifeState == BoidLifeState.Dead;
@@ -40,9 +45,7 @@ public class Boid : SteeringAgent
         bounds = bounds ? bounds : SimulationBounds.Instance;
         if (sensor != null && flocking != null)
             sensor.SetRadius(Mathf.Max(flocking.AlignmentRadius, flocking.CohesionRadius));
-        meshRenderers = GetComponentsInChildren<Renderer>();
-        if (meshRenderers.Length > 0 && meshRenderers[0].material != null)
-            originalColor = meshRenderers[0].material.color;
+        if (!TryGetComponent<WorldHealthBar>(out _)) gameObject.AddComponent<WorldHealthBar>();
         health.OnDied += Die;
     }
 
@@ -58,9 +61,11 @@ public class Boid : SteeringAgent
         ApplyForce(ComputeSteering());
         base.Update();
     }
+
     private Vector3 ComputeSteering()
     {
-        if (TryEvade(out Vector3 evade)) return evade;
+        IsEvading = TryEvade(out Vector3 evade);
+        if (IsEvading) return evade;
         if (TrySeekPOI(out Vector3 poi)) return poi;
 
         bool isIsolated = (sensor == null || sensor.Boids.Count == 0);
@@ -68,6 +73,7 @@ public class Boid : SteeringAgent
         Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
         return flock + bound;
     }
+
     private bool TryEvade(out Vector3 force)
     {
         force = Vector3.zero;
@@ -96,6 +102,7 @@ public class Boid : SteeringAgent
             Stop();
             if (toPOI.sqrMagnitude > 0.001f)
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toPOI.normalized), RotationSpeed * Time.deltaTime);
+
             if (Time.time >= lastPOIDamageTime + poiDamageInterval)
             {
                 poi.TakeDamage(poiDamageAmount);
@@ -104,8 +111,8 @@ public class Boid : SteeringAgent
             return true;
         }
 
-        Vector3 arrive = SteeringBehaviors.Arrive(this, poi.transform.position, poiSlowingRadius) * poiWeight;
-        force = arrive + flocking.ComputeSeparationOnly(this, sensor ? sensor.Boids : null);
+        force = SteeringBehaviors.Arrive(this, poi.transform.position, poiSlowingRadius) * poiWeight +
+                flocking.ComputeSeparationOnly(this, sensor.Boids);
         return true;
     }
 
@@ -128,7 +135,7 @@ public class Boid : SteeringAgent
 
     public void TakeDamage(float amount) => health.TakeDamage(amount);
     public void StartDelayedRespawn() => Collect();
-    private void Die() { lifeState = BoidLifeState.Dead; ResetMotion(); SetMeshColor(Color.gray); }
+    private void Die() { lifeState = BoidLifeState.Dead; ResetMotion(); }
     public void Collect()
     {
         if (lifeState == BoidLifeState.Collected) return;
@@ -138,11 +145,5 @@ public class Boid : SteeringAgent
         OnCollected?.Invoke(this);
         respawner.BeginRespawn(OnRespawnCompleted);
     }
-    private void OnRespawnCompleted() { lifeState = BoidLifeState.Alive; health.ResetHealth(); ResetMotion(); SetMeshColor(originalColor); }
-    private void SetMeshColor(Color color)
-    {
-        for (int i = 0; i < meshRenderers.Length; i++)
-            if (meshRenderers[i] != null && meshRenderers[i].material != null)
-                meshRenderers[i].material.color = color;
-    }
+    private void OnRespawnCompleted() { lifeState = BoidLifeState.Alive; health.ResetHealth(); ResetMotion(); }
 }
