@@ -25,9 +25,11 @@ public class HunterNPC : MonoBehaviour
     public float poiSpawnInterval = 5f;
     [HideInInspector] public float poiTimer = 0f;
 
-    [Header("Detección")]
+    [Header("Detección y Sensor")]
     public string targetTag = "Boid";
     public float visionRadius = 15f;
+    [SerializeField] private AgentSensor sensor;
+    public AgentSensor Sensor => sensor;
 
     public HunterFSM FSM { get; private set; }
     public SteeringAgent Agent { get; private set; }
@@ -39,6 +41,14 @@ public class HunterNPC : MonoBehaviour
     {
         FSM = GetComponent<HunterFSM>();
         Agent = GetComponent<SteeringAgent>();
+        if (sensor == null)
+        {
+            sensor = GetComponentInChildren<AgentSensor>();
+        }
+        if (sensor != null)
+        {
+            sensor.SetRadius(visionRadius);
+        }
         meshRenderers = GetComponentsInChildren<Renderer>();
 
         if (!CompareTag("Hunter"))

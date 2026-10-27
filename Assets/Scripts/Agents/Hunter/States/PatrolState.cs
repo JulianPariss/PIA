@@ -1,5 +1,6 @@
 /// <summary>
 /// Estado de patrullaje para el Cazador. Recorre waypoints en el plano XZ y genera POIs periódicamente sin obstruir el movimiento.
+/// Utiliza AgentSensor para percibir boids vivos y eliminados sin llamadas a OverlapSphere ni GetComponent.
 /// </summary>
 using UnityEngine;
 
@@ -29,17 +30,19 @@ public class PatrolState : IState
             }
         }
 
-        Collider[] hits = Physics.OverlapSphere(hunter.transform.position, hunter.visionRadius);
         Boid closestLivingBoid = null;
         Boid closestDeadBoid = null;
         float minLivingDistSqr = float.MaxValue;
         float minDeadDistSqr = float.MaxValue;
 
-        for (int i = 0; i < hits.Length; i++)
+        if (hunter.Sensor != null)
         {
-            Boid boid = hits[i].GetComponent<Boid>() ?? hits[i].GetComponentInParent<Boid>();
-            if (boid != null)
+            var detectedBoids = hunter.Sensor.Boids;
+            for (int i = 0; i < detectedBoids.Count; i++)
             {
+                Boid boid = detectedBoids[i];
+                if (boid == null) continue;
+
                 Vector3 toBoid = boid.transform.position - hunter.transform.position;
                 toBoid.y = 0f;
                 float distSqr = toBoid.sqrMagnitude;
