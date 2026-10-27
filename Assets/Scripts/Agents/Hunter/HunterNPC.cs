@@ -3,7 +3,8 @@ using UnityEngine;
 
 /// <summary>
 /// Controlador principal del NPC Cazador. Administra la FSM basada en enum, parámetros de ataque,
-/// generación de POIs, blackboard de objetivos y feedback de color por estado.
+/// generación de POIs mediante POISpawner, blackboard de objetivos con persistencia de LastDamagedTarget,
+/// y pipeline de eventos de acción.
 /// </summary>
 [RequireComponent(typeof(SteeringAgent))]
 public class HunterNPC : MonoBehaviour
@@ -15,17 +16,16 @@ public class HunterNPC : MonoBehaviour
     private float lastAttackTime = 0f;
 
     public bool IsTBAReady => Time.time >= lastAttackTime + TBA;
+    public float AttackCooldownRemaining => Mathf.Max(0f, (lastAttackTime + TBA) - Time.time);
     public void ResetAttackCooldown() => lastAttackTime = Time.time;
 
     [Header("Ruta de Patrullaje")]
     [SerializeField] private Transform[] waypoints = Array.Empty<Transform>();
     public Transform[] Waypoints => waypoints;
 
-    [Header("Prefabs y Spawn de POI")]
-    [SerializeField] private GameObject poiPrefab = null;
-    [SerializeField] private GameObject[] poiPrefabs = Array.Empty<GameObject>();
-    [SerializeField] private float poiSpawnInterval = 5f;
-    private float poiTimer = 0f;
+    [Header("Spawner de POI")]
+    [SerializeField] private POISpawner poiSpawner;
+    public POISpawner POISpawner => poiSpawner;
 
     [Header("Detección y Sensor")]
     [SerializeField] private float visionRadius = 15f;
@@ -44,6 +44,11 @@ public class HunterNPC : MonoBehaviour
 
     // Blackboard
     public Boid CurrentTarget { get; set; }
+    public Boid LastDamagedTarget { get; set; }
+
+    // Eventos de acción (trazabilidad y feedback)
+    public event Action<string, Boid> OnActionExecuted;
+    public void NotifyAction(string actionName, Boid target) => OnActionExecuted?.Invoke(actionName, target);
 
     public StateMachine<HunterStateId> FSM { get; private set; }
     public SteeringAgent Agent { get; private set; }
@@ -65,6 +70,11 @@ public class HunterNPC : MonoBehaviour
             sensor.SetRadius(visionRadius);
         }
 
+        if (poiSpawner == null)
+        {
+            poiSpawner = GetComponent<POISpawner>();
+        }
+
         meshRenderers = GetComponentsInChildren<Renderer>();
 
         if (!CompareTag("Hunter"))
@@ -83,8 +93,6 @@ public class HunterNPC : MonoBehaviour
     protected virtual void Start()
     {
         ResetAttackCooldown();
-        poiTimer = poiSpawnInterval * 0.6f;
-
         FSM.ChangeState(HunterStateId.Patrol);
         UpdateStateColor(HunterStateId.Patrol);
     }
@@ -109,13 +117,30 @@ public class HunterNPC : MonoBehaviour
 
     private void UpdateStateColor(HunterStateId stateId)
     {
+        HunterVisualMode mode = stateId switch
+        {
+            HunterStateId.Patrol => HunterVisualMode.Patrol,
+            HunterStateId.Attack => HunterVisualMode.Pursuit,
+            HunterStateId.Gather => HunterVisualMode.Gather,
+            _ => HunterVisualMode.Patrol
+        };
+        SetVisualMode(mode);
+    }
+
+    /// <summary>
+    /// Configura el color visual del Cazador para reflejar su acción en curso:
+    /// Verde (Patrulla waypoints), Verde Agua (Persecución/Aproximación), Rojo (Ataque) o Amarillo (Recolección).
+    /// </summary>
+    public void SetVisualMode(HunterVisualMode mode)
+    {
         if (meshRenderers == null) return;
 
-        Color targetColor = stateId switch
+        Color targetColor = mode switch
         {
-            HunterStateId.Patrol => Color.green,
-            HunterStateId.Attack => Color.red,
-            HunterStateId.Gather => Color.yellow,
+            HunterVisualMode.Patrol => Color.green,
+            HunterVisualMode.Pursuit => new Color(0.1f, 0.85f, 0.75f), // Verde agua (Teal)
+            HunterVisualMode.Attack => Color.red,
+            HunterVisualMode.Gather => Color.yellow,
             _ => Color.white
         };
 
@@ -128,31 +153,91 @@ public class HunterNPC : MonoBehaviour
         }
     }
 
-    public void TickPOITimer(float deltaTime)
+    /// <summary>
+    /// Selecciona el objetivo de ataque dando prioridad al último objetivo dañado (R2) si sigue vivo y en visión.
+    /// </summary>
+    public Boid SelectAttackTarget()
     {
-        poiTimer += deltaTime;
-    }
-
-    public bool CanSpawnPOIByTimer => poiTimer >= poiSpawnInterval;
-
-    public void ResetPOITimer()
-    {
-        poiTimer = 0f;
-    }
-
-    public GameObject SpawnPOI(Vector3 position)
-    {
-        if (!PointOfInterest.CanSpawnPOI) return null;
-
-        GameObject prefabToInstantiate = poiPrefab;
-        if (prefabToInstantiate == null && poiPrefabs != null && poiPrefabs.Length > 0)
+        if (LastDamagedTarget != null && LastDamagedTarget.IsAlive && !LastDamagedTarget.isRespawning && IsInVision(LastDamagedTarget))
         {
-            prefabToInstantiate = poiPrefabs[UnityEngine.Random.Range(0, poiPrefabs.Length)];
+            return LastDamagedTarget;
         }
 
-        if (prefabToInstantiate == null) return null;
+        Boid closest = null;
+        float minSqr = float.MaxValue;
 
-        return Instantiate(prefabToInstantiate, position, Quaternion.identity);
+        if (sensor != null)
+        {
+            var boids = sensor.Boids;
+            for (int i = 0; i < boids.Count; i++)
+            {
+                Boid b = boids[i];
+                if (b == null || !b.IsAlive || b.isRespawning) continue;
+
+                Vector3 diff = b.transform.position - transform.position;
+                diff.y = 0f;
+                float sqr = diff.sqrMagnitude;
+
+                if (sqr < minSqr)
+                {
+                    minSqr = sqr;
+                    closest = b;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    /// <summary>
+    /// Localiza el Boid caído más cercano dentro de la percepción que esté listo para ser recolectado.
+    /// </summary>
+    public Boid FindCollectableBoid()
+    {
+        Boid closest = null;
+        float minSqr = float.MaxValue;
+
+        if (sensor != null)
+        {
+            var boids = sensor.Boids;
+            for (int i = 0; i < boids.Count; i++)
+            {
+                Boid b = boids[i];
+                if (b == null || !b.isDead || b.isRespawning) continue;
+
+                Vector3 diff = b.transform.position - transform.position;
+                diff.y = 0f;
+                float sqr = diff.sqrMagnitude;
+
+                if (sqr < minSqr)
+                {
+                    minSqr = sqr;
+                    closest = b;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    /// <summary>
+    /// Determina si un Boid se encuentra dentro del rango de percepción del Cazador.
+    /// </summary>
+    public bool IsInVision(Boid boid)
+    {
+        if (boid == null || !boid.gameObject.activeInHierarchy) return false;
+        if (sensor != null)
+        {
+            var list = sensor.Boids;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i] == boid) return true;
+            }
+        }
+
+        Vector3 diff = boid.transform.position - transform.position;
+        diff.y = 0f;
+        return diff.sqrMagnitude <= (visionRadius * visionRadius);
     }
 
     public Transform GetCurrentWaypoint()

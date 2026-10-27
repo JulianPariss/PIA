@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Estado de patrullaje para el Cazador. Recorre waypoints según el modo configurado y suelta POIs periódicamente.
-/// Utiliza AgentSensor para detectar boids vivos o muertos y transiciona por enum a Attack o Gather.
+/// Estado de patrullaje para el Cazador. Gestiona la generación de POIs mediante POISpawner,
+/// prioriza la recolección de presas caídas (D1) y la reanudación del ataque sobre presas heridas (D2).
+/// Recorre la ruta de waypoints según el modo configurado (Loop o PingPong).
 /// </summary>
 public class PatrolState : State<HunterStateId>
 {
@@ -24,21 +25,33 @@ public class PatrolState : State<HunterStateId>
     {
         UpdatePOISpawn();
 
-        CheckSensorTargets(out Boid closestLiving, out Boid closestDead);
-
-        // Prioridad 1: Si hay un boid muerto para recolectar
-        if (closestDead != null)
+        // Prioridad 1 (D1): Recolectar presa caída observable
+        Boid deadBoid = hunter.FindCollectableBoid();
+        if (deadBoid != null)
         {
-            hunter.CurrentTarget = closestDead;
+            hunter.CurrentTarget = deadBoid;
             fsm.ChangeState(HunterStateId.Gather);
             return;
         }
 
-        // Prioridad 2: Si el TBA está listo y hay un boid vivo
-        if (closestLiving != null && hunter.IsTBAReady)
+        // Prioridad 2: Atacar si el TBA ha transcurrido y hay presa viva
+        if (hunter.IsTBAReady)
         {
-            hunter.CurrentTarget = closestLiving;
-            fsm.ChangeState(HunterStateId.Attack);
+            Boid attackTarget = hunter.SelectAttackTarget();
+            if (attackTarget != null)
+            {
+                hunter.CurrentTarget = attackTarget;
+                fsm.ChangeState(HunterStateId.Attack);
+                return;
+            }
+        }
+
+        // Decisión D2: Persecución de mantenimiento si el TBA está en enfriamiento pero la presa sigue visible
+        if (data.pursuitWhileCooldown && hunter.LastDamagedTarget != null &&
+            hunter.LastDamagedTarget.IsAlive && !hunter.LastDamagedTarget.isRespawning &&
+            hunter.IsInVision(hunter.LastDamagedTarget))
+        {
+            MaintainPursuit(hunter.LastDamagedTarget);
             return;
         }
 
@@ -47,52 +60,26 @@ public class PatrolState : State<HunterStateId>
 
     private void UpdatePOISpawn()
     {
-        hunter.TickPOITimer(Time.deltaTime);
-        if (!hunter.CanSpawnPOIByTimer) return;
-
-        hunter.ResetPOITimer();
-        if (PointOfInterest.CanSpawnPOI)
+        if (hunter.POISpawner != null)
         {
             Vector3 spawnPos = hunter.transform.position - (hunter.transform.forward * data.poiDropOffset);
-            hunter.SpawnPOI(spawnPos);
+            hunter.POISpawner.Tick(Time.deltaTime, spawnPos);
         }
     }
 
-    private void CheckSensorTargets(out Boid closestLiving, out Boid closestDead)
+    private void MaintainPursuit(Boid target)
     {
-        closestLiving = null;
-        closestDead = null;
-
-        if (hunter.Sensor == null) return;
-
-        float minLivingDistSqr = float.MaxValue;
-        float minDeadDistSqr = float.MaxValue;
-        var boids = hunter.Sensor.Boids;
-
-        for (int i = 0; i < boids.Count; i++)
-        {
-            Boid boid = boids[i];
-            if (boid == null || boid.isRespawning) continue;
-
-            Vector3 diff = boid.transform.position - hunter.transform.position;
-            diff.y = 0f;
-            float distSqr = diff.sqrMagnitude;
-
-            if (boid.IsAlive && distSqr < minLivingDistSqr)
-            {
-                minLivingDistSqr = distSqr;
-                closestLiving = boid;
-            }
-            else if (boid.isDead && distSqr < minDeadDistSqr)
-            {
-                minDeadDistSqr = distSqr;
-                closestDead = boid;
-            }
-        }
+        hunter.SetVisualMode(HunterVisualMode.Pursuit);
+        Vector3 targetPos = target.transform.position;
+        targetPos.y = hunter.transform.position.y;
+        Vector3 seekForce = SteeringBehaviors.Seek(hunter.Agent, targetPos);
+        seekForce.y = 0f;
+        hunter.Agent.ApplyForce(seekForce * 0.8f);
     }
 
     private void FollowWaypoints()
     {
+        hunter.SetVisualMode(HunterVisualMode.Patrol);
         Transform currentWp = hunter.GetCurrentWaypoint();
         if (currentWp == null) return;
 

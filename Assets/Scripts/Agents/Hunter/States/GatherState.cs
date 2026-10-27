@@ -2,13 +2,16 @@ using UnityEngine;
 
 /// <summary>
 /// Estado de recolección para el Cazador. Se desplaza mediante Arrive hacia un Boid caído (Blackboard)
-/// y permanece en el lugar durante un tiempo determinado antes de recolectarlo (haciéndolo desaparecer).
+/// y permanece detenido en el lugar durante un tiempo determinado antes de recolectarlo (haciéndolo desaparecer).
+/// Expone el progreso de recolección y aborta limpiamente si el objetivo deja de estar disponible.
 /// </summary>
 public class GatherState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
     private readonly GatherData data;
     private float gatherTimer = 0f;
+
+    public float Progress => data.duration > 0f ? Mathf.Clamp01(gatherTimer / data.duration) : 1f;
 
     public GatherState(StateMachine<HunterStateId> fsm, HunterNPC hunter, GatherData data) : base(fsm)
     {
@@ -20,6 +23,13 @@ public class GatherState : State<HunterStateId>
     {
         gatherTimer = 0f;
         Boid target = hunter.CurrentTarget;
+
+        if (target == null || !target.isDead || target.isRespawning)
+        {
+            target = hunter.FindCollectableBoid();
+            hunter.CurrentTarget = target;
+        }
+
         if (target == null || !target.isDead || target.isRespawning)
         {
             fsm.ChangeState(HunterStateId.Patrol);
@@ -58,6 +68,13 @@ public class GatherState : State<HunterStateId>
         if (gatherTimer >= data.duration)
         {
             target.Collect();
+            hunter.NotifyAction("GatherCompleted", target);
+
+            if (hunter.LastDamagedTarget == target)
+            {
+                hunter.LastDamagedTarget = null;
+            }
+
             hunter.CurrentTarget = null;
             fsm.ChangeState(HunterStateId.Patrol);
         }
