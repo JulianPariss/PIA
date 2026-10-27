@@ -1,22 +1,13 @@
 using UnityEngine;
 
-/// <summary>
-/// Algoritmos estáticos para calcular fuerzas de los Steering Behaviors clásicos (Seek, Flee, Arrive, Pursuit, Evade).
-/// </summary>
 public static class SteeringBehaviors
 {
-    /// <summary>
-    /// Calcula la velocidad deseada en una dirección normalizada multiplicada por MaxSpeed del agente.
-    /// </summary>
     public static Vector3 DesiredVelocity(SteeringAgent agent, Vector3 direction)
     {
         if (agent == null || direction.sqrMagnitude < 0.0001f) return Vector3.zero;
         return direction.normalized * agent.MaxSpeed;
     }
 
-    /// <summary>
-    /// Calcula la fuerza de steering requerida hacia la velocidad deseada, limitada por MaxSteering.
-    /// </summary>
     public static Vector3 Steer(SteeringAgent agent, Vector3 desiredVelocity)
     {
         if (agent == null) return Vector3.zero;

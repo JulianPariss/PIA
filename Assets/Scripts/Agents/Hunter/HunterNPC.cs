@@ -1,19 +1,22 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
-/// <summary>
-/// Controlador principal del NPC Cazador. Administra la FSM basada en enum, parámetros de ataque,
-/// generación de POIs mediante POISpawner, blackboard de objetivos con persistencia de LastDamagedTarget,
-/// y pipeline de eventos de acción.
-/// </summary>
 [RequireComponent(typeof(SteeringAgent))]
 public class HunterNPC : MonoBehaviour
 {
     [Header("Parámetros de Ataque")]
-    [SerializeField] public float TBA = 2.5f;
-    [SerializeField] public float RangeAttackRadius = 10f;
-    [SerializeField] public float MeleeAttackRadius = 2.5f;
+    [FormerlySerializedAs("TBA")]
+    [SerializeField] private float tba = 1.8f;
+    [FormerlySerializedAs("RangeAttackRadius")]
+    [SerializeField] private float rangeAttackRadius = 8f;
+    [FormerlySerializedAs("MeleeAttackRadius")]
+    [SerializeField] private float meleeAttackRadius = 2.5f;
     private float lastAttackTime = 0f;
+
+    public float TBA => tba;
+    public float RangeAttackRadius => rangeAttackRadius;
+    public float MeleeAttackRadius => meleeAttackRadius;
 
     public bool IsTBAReady => Time.time >= lastAttackTime + TBA;
     public float AttackCooldownRemaining => Mathf.Max(0f, (lastAttackTime + TBA) - Time.time);
@@ -28,7 +31,7 @@ public class HunterNPC : MonoBehaviour
     public POISpawner POISpawner => poiSpawner;
 
     [Header("Detección y Sensor")]
-    [SerializeField] private float visionRadius = 15f;
+    [SerializeField] private float visionRadius = 14f;
     [SerializeField] private AgentSensor sensor;
     public AgentSensor Sensor => sensor;
     public float VisionRadius => visionRadius;
@@ -42,11 +45,9 @@ public class HunterNPC : MonoBehaviour
     public AttackData AttackConfig => attackData;
     public GatherData GatherConfig => gatherData;
 
-    // Blackboard
     public Boid CurrentTarget { get; set; }
     public Boid LastDamagedTarget { get; set; }
 
-    // Eventos de acción (trazabilidad y feedback)
     public event Action<string, Boid> OnActionExecuted;
     public void NotifyAction(string actionName, Boid target) => OnActionExecuted?.Invoke(actionName, target);
 
@@ -59,6 +60,7 @@ public class HunterNPC : MonoBehaviour
     private MaterialPropertyBlock propBlock;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
+
     public HunterVisualMode CurrentVisualMode { get; private set; } = HunterVisualMode.Patrol;
     public float GatherProgress => (FSM != null && FSM.CurrentState is GatherState gs) ? gs.Progress : 0f;
 
@@ -70,6 +72,7 @@ public class HunterNPC : MonoBehaviour
         {
             sensor = GetComponentInChildren<AgentSensor>();
         }
+
         if (sensor != null)
         {
             sensor.SetRadius(visionRadius);
@@ -82,6 +85,7 @@ public class HunterNPC : MonoBehaviour
 
         meshRenderers = GetComponentsInChildren<Renderer>();
         propBlock = new MaterialPropertyBlock();
+
         if (!TryGetComponent<HunterVisuals>(out _)) gameObject.AddComponent<HunterVisuals>();
         if (!TryGetComponent<HunterStateLabel>(out _)) gameObject.AddComponent<HunterStateLabel>();
         if (!TryGetComponent<SimulationHUD>(out _)) gameObject.AddComponent<SimulationHUD>();
@@ -91,7 +95,6 @@ public class HunterNPC : MonoBehaviour
             try { gameObject.tag = "Hunter"; } catch (Exception) { }
         }
 
-        // FSM: Registración única de estados (cero allocations en runtime)
         FSM = new StateMachine<HunterStateId>();
         FSM.Register(HunterStateId.Patrol, new PatrolState(FSM, this, patrolData));
         FSM.Register(HunterStateId.Attack, new AttackState(FSM, this, attackData));
@@ -136,10 +139,6 @@ public class HunterNPC : MonoBehaviour
         SetVisualMode(mode);
     }
 
-    /// <summary>
-    /// Configura el color visual del Cazador para reflejar su acción en curso:
-    /// Verde (Patrulla waypoints), Verde Agua (Persecución/Aproximación), Rojo (Ataque) o Amarillo (Recolección).
-    /// </summary>
     public void SetVisualMode(HunterVisualMode mode)
     {
         if (meshRenderers == null) return;
@@ -147,7 +146,7 @@ public class HunterNPC : MonoBehaviour
         Color targetColor = mode switch
         {
             HunterVisualMode.Patrol => Color.green,
-            HunterVisualMode.Pursuit => new Color(0.1f, 0.85f, 0.75f), // Verde agua (Teal)
+            HunterVisualMode.Pursuit => new Color(0.1f, 0.85f, 0.75f),
             HunterVisualMode.Attack => Color.red,
             HunterVisualMode.Gather => Color.yellow,
             _ => Color.white
@@ -155,6 +154,7 @@ public class HunterNPC : MonoBehaviour
 
         CurrentVisualMode = mode;
         if (propBlock == null) propBlock = new MaterialPropertyBlock();
+
         for (int i = 0; i < meshRenderers.Length; i++)
         {
             if (meshRenderers[i] != null && meshRenderers[i].sharedMaterial != null)
@@ -167,9 +167,6 @@ public class HunterNPC : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Selecciona el objetivo de ataque dando prioridad al último objetivo dañado (R2) si sigue vivo y en visión.
-    /// </summary>
     public Boid SelectAttackTarget()
     {
         if (LastDamagedTarget != null && LastDamagedTarget.IsAlive && !LastDamagedTarget.isRespawning && IsInVision(LastDamagedTarget))
@@ -203,9 +200,6 @@ public class HunterNPC : MonoBehaviour
         return closest;
     }
 
-    /// <summary>
-    /// Localiza el Boid caído más cercano dentro de la percepción que esté listo para ser recolectado.
-    /// </summary>
     public Boid FindCollectableBoid()
     {
         Boid closest = null;
@@ -234,12 +228,10 @@ public class HunterNPC : MonoBehaviour
         return closest;
     }
 
-    /// <summary>
-    /// Determina si un Boid se encuentra dentro del rango de percepción del Cazador.
-    /// </summary>
     public bool IsInVision(Boid boid)
     {
         if (boid == null || !boid.gameObject.activeInHierarchy) return false;
+
         if (sensor != null)
         {
             var list = sensor.Boids;
@@ -284,7 +276,7 @@ public class HunterNPC : MonoBehaviour
         {
             currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
         }
-        else // PingPong
+        else
         {
             if (isPatrolReversed)
             {

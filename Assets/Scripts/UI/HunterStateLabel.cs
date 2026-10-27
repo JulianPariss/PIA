@@ -1,9 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Etiqueta de texto proyectada en el espacio del mundo sobre el Cazador.
-/// Muestra de forma destacada el estado actual de la FSM, el modo de acción y el objetivo activo.
-/// </summary>
 public class HunterStateLabel : MonoBehaviour
 {
     [Header("Configuración")]
@@ -65,7 +61,7 @@ public class HunterStateLabel : MonoBehaviour
         Vector3 worldPos = transform.position + Vector3.up * heightOffset;
         Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
 
-        if (screenPos.z <= 0.5f) return; // Detrás de la cámara
+        if (screenPos.z <= 0.5f) return;
 
         EnsureStyles();
 
@@ -76,21 +72,21 @@ public class HunterStateLabel : MonoBehaviour
         {
             case HunterVisualMode.Pursuit:
                 stateText = "PERSECUCIÓN";
-                stateColor = new Color(0.1f, 0.85f, 0.75f); // Teal
+                stateColor = new Color(0.1f, 0.85f, 0.75f);
                 break;
             case HunterVisualMode.Attack:
                 stateText = "ATAQUE";
-                stateColor = new Color(1f, 0.25f, 0.25f); // Rojo
+                stateColor = new Color(1f, 0.25f, 0.25f);
                 break;
             case HunterVisualMode.Gather:
                 int pct = Mathf.RoundToInt(hunter.GatherProgress * 100f);
                 stateText = $"RECOLECCIÓN {pct}%";
-                stateColor = new Color(1f, 0.88f, 0.1f); // Amarillo
+                stateColor = new Color(1f, 0.88f, 0.1f);
                 break;
             case HunterVisualMode.Patrol:
             default:
                 stateText = "PATRULLA";
-                stateColor = new Color(0.3f, 0.95f, 0.4f); // Verde
+                stateColor = new Color(0.3f, 0.95f, 0.4f);
                 break;
         }
 

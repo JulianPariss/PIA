@@ -1,18 +1,13 @@
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// Componente de feedback visual para el agente Boid.
-/// Controla la apariencia mediante MaterialPropertyBlock (cero fugas de material):
-/// degradado por salud, flash blanco en daño, tinte de evasión y gris al morir.
-/// </summary>
 [RequireComponent(typeof(Health), typeof(Boid))]
 public class BoidVisuals : MonoBehaviour
 {
     [Header("Colores")]
-    [SerializeField] private Color healthyColor = new Color(0.35f, 0.65f, 0.95f); // Celeste / Azul
-    [SerializeField] private Color criticalColor = new Color(0.95f, 0.25f, 0.25f); // Rojo / Desgastado
-    [SerializeField] private Color evadingColor = new Color(1f, 0.5f, 0.1f); // Naranja / Alerta
+    [SerializeField] private Color healthyColor = new Color(0.35f, 0.65f, 0.95f);
+    [SerializeField] private Color criticalColor = new Color(0.95f, 0.25f, 0.25f);
+    [SerializeField] private Color evadingColor = new Color(1f, 0.5f, 0.1f);
     [SerializeField] private Color deadColor = Color.gray;
     [SerializeField] private Color damageFlashColor = Color.white;
 

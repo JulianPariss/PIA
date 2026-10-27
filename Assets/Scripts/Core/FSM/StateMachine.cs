@@ -2,11 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Máquina de Estados Finita (FSM) genérica, reutilizable y desacoplada de MonoBehaviour.
-/// Gestiona estados indexados por Enum, evitando instanciaciones en runtime y sobrecarga del GC.
-/// </summary>
-/// <typeparam name="TKey">Tipo de Enum que representa los identificadores de estado.</typeparam>
 public class StateMachine<TKey> where TKey : Enum
 {
     private readonly Dictionary<TKey, State<TKey>> states = new Dictionary<TKey, State<TKey>>();

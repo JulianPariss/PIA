@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 9149310084431599658}
   - component: {fileID: 8035414659969489786}
   - component: {fileID: 7744918105848589413}
+  - component: {fileID: 9155969510465644405}
   m_Layer: 6
   m_Name: Boid
   m_TagString: Boid
@@ -139,13 +140,14 @@ MonoBehaviour:
   rotationSpeed: 10
   lockRotationToY: 1
   lockMovementToXZ: 1
+  showDebugRays: 1
   health: {fileID: 9149310084431599658}
   flocking: {fileID: 8035414659969489786}
   respawner: {fileID: 7744918105848589413}
   sensor: {fileID: 3085891118719070309}
   bounds: {fileID: 0}
-  poiInteractionRadius: 1.5
-  poiSlowingRadius: 3
+  poiInteractionRadius: 2.8
+  poiSlowingRadius: 5
   poiDamageAmount: 10
   poiDamageInterval: 1
   evadeWeight: 2
@@ -223,6 +225,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BoidRespawner
   respawnDelay: 5
   bounds: {fileID: 0}
+--- !u!114 &9155969510465644405
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1824131709523762699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da1c193e64b1b0843b2c72cbeb89c2c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BoidVisuals
+  healthyColor: {r: 0.35, g: 0.65, b: 0.95, a: 1}
+  criticalColor: {r: 0.95, g: 0.25, b: 0.25, a: 1}
+  evadingColor: {r: 1, g: 0.5, b: 0.1, a: 1}
+  deadColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  damageFlashColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &4146264583222951443
 GameObject:
   m_ObjectHideFlags: 0

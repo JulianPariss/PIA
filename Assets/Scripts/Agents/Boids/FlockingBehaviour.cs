@@ -1,10 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Implementación modular del algoritmo de Flocking (Reynolds).
-/// Calcula de forma independiente Separation, Alignment y Cohesion reutilizando SteeringBehaviors.
-/// </summary>
 public class FlockingBehaviour : MonoBehaviour
 {
     [Header("Radios de Interacción")]
@@ -13,13 +9,13 @@ public class FlockingBehaviour : MonoBehaviour
     [SerializeField] private float cohesionRadius = 6f;
 
     [Header("Pesos Ponderados")]
-    [Range(0f, 3f)] [Tooltip("Peso de alineación de velocidad con vecinos")]
+    [Range(0f, 3f)]
     [SerializeField] private float alignmentWeight = 1f;
 
-    [Range(0f, 3f)] [Tooltip("Peso de cohesión hacia el centro de masa de la bandada")]
+    [Range(0f, 3f)]
     [SerializeField] private float cohesionWeight = 1f;
 
-    [Range(0f, 3f)] [Tooltip("Peso de separación para evitar aglomeración")]
+    [Range(0f, 3f)]
     [SerializeField] private float separationWeight = 1.8f;
 
     public float SeparationRadius => separationRadius;
@@ -38,9 +34,6 @@ public class FlockingBehaviour : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Calcula la fuerza total combinada de Flocking (Separación + Alineación + Cohesión).
-    /// </summary>
     public Vector3 ComputeFlocking(SteeringAgent self, IReadOnlyList<Boid> neighbors)
     {
         if (self == null || neighbors == null || neighbors.Count == 0) return Vector3.zero;
@@ -52,9 +45,6 @@ public class FlockingBehaviour : MonoBehaviour
         return separationForce + alignmentForce + cohesionForce;
     }
 
-    /// <summary>
-    /// Helper público para calcular únicamente la fuerza de separación (usado en Evade y arribo a POIs).
-    /// </summary>
     public Vector3 ComputeSeparationOnly(SteeringAgent self, IReadOnlyList<Boid> neighbors)
     {
         if (self == null || neighbors == null || neighbors.Count == 0) return Vector3.zero;
@@ -152,16 +142,13 @@ public class FlockingBehaviour : MonoBehaviour
     {
         Vector3 pos = transform.position;
 
-        // Separación (Rojo suave)
         Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.6f);
         Gizmos.DrawWireSphere(pos, separationRadius);
 
-        // Alineación (Azul / Cyan)
         Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.6f);
         Gizmos.DrawWireSphere(pos, alignmentRadius);
 
-        // Cohesión (Verde)
-        Gizmos.color = new Color(0.2f, 1f, 0.2f, 0.6f);
+        Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.4f);
         Gizmos.DrawWireSphere(pos, cohesionRadius);
     }
 }

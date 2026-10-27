@@ -1,9 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Define el volumen de contención y el área de aparición para la simulación.
-/// Provee helpers para generar posiciones aleatorias y fuerzas de retorno.
-/// </summary>
 public class SimulationBounds : MonoBehaviour
 {
     public static SimulationBounds Instance { get; private set; }
@@ -22,12 +18,12 @@ public class SimulationBounds : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (Instance == this) Instance = null;
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
-    /// <summary>
-    /// Retorna un punto aleatorio en el plano XZ dentro del área de simulación.
-    /// </summary>
     public Vector3 RandomPoint(float yLevel = 0f)
     {
         float rx = Random.Range(-size.x * 0.5f, size.x * 0.5f);
@@ -35,9 +31,6 @@ public class SimulationBounds : MonoBehaviour
         return new Vector3(center.x + rx, yLevel, center.z + rz);
     }
 
-    /// <summary>
-    /// Evalúa si una posición está contenida dentro del área en el plano XZ.
-    /// </summary>
     public bool Contains(Vector3 position)
     {
         float halfX = size.x * 0.5f;
@@ -46,9 +39,6 @@ public class SimulationBounds : MonoBehaviour
                position.z >= center.z - halfZ && position.z <= center.z + halfZ;
     }
 
-    /// <summary>
-    /// Aplica fuerza de contención si supera el límite de seguridad, o un retorno suave al centro si está aislado.
-    /// </summary>
     public Vector3 ComputeContainmentForce(SteeringAgent agent, float boundaryWeight = 1.5f, bool isIsolated = false)
     {
         if (agent == null) return Vector3.zero;

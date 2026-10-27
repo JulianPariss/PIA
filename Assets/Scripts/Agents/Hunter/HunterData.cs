@@ -1,19 +1,12 @@
 using System;
 using UnityEngine;
 
-/// <summary>
-/// Modo de navegación del circuito de waypoints para la patrulla.
-/// </summary>
 public enum PatrolMode
 {
     Loop,
     PingPong
 }
 
-/// <summary>
-/// Modo visual de representación para feedback del Cazador:
-/// Verde (Patrulla waypoints), Verde Agua (Persecución activa), Rojo (Ataque en ejecución) y Amarillo (Recolección).
-/// </summary>
 public enum HunterVisualMode
 {
     Patrol,
@@ -22,9 +15,6 @@ public enum HunterVisualMode
     Gather
 }
 
-/// <summary>
-/// Parámetros configurables desde el Inspector para el estado de patrulla del Cazador.
-/// </summary>
 [Serializable]
 public class PatrolData
 {
@@ -39,32 +29,30 @@ public class PatrolData
 
     [Tooltip("Si está activo, persigue suavemente al objetivo dañado visible mientras transcurre el cooldown de ataque.")]
     public bool pursuitWhileCooldown = true;
+
+    [Tooltip("Factor de atenuación de fuerza durante la persecución de mantenimiento en patrulla.")]
+    [Range(0.1f, 1f)]
+    public float pursuitDamping = 0.85f;
 }
 
-/// <summary>
-/// Parámetros configurables desde el Inspector para el estado de ataque del Cazador.
-/// </summary>
 [Serializable]
 public class AttackData
 {
     [Tooltip("Daño infligido por ataque cuerpo a cuerpo.")]
-    public float meleeDamage = 40f;
+    public float meleeDamage = 45f;
 
     [Tooltip("Daño infligido por ataque a distancia.")]
-    public float rangedDamage = 25f;
+    public float rangedDamage = 30f;
 
     [Tooltip("Tiempo en segundos que se sostiene visiblemente la ejecución del ataque.")]
     public float attackDuration = 0.4f;
 }
 
-/// <summary>
-/// Parámetros configurables desde el Inspector para el estado de recolección del Cazador.
-/// </summary>
 [Serializable]
 public class GatherData
 {
     [Tooltip("Tiempo en segundos necesario para recolectar un Boid caído.")]
-    public float duration = 3f;
+    public float duration = 2.5f;
 
     [Tooltip("Distancia de frenado y permanencia respecto al Boid caído.")]
     public float arrivalDistance = 2f;

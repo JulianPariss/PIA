@@ -1,9 +1,6 @@
 using UnityEngine;
 using UnityEngine.Serialization;
 
-/// <summary>
-/// Agente base que integra físicas elementales de steering (velocidad, fuerzas y rotación en plano XZ).
-/// </summary>
 public class SteeringAgent : MonoBehaviour
 {
     [Header("Parámetros de Movimiento")]
@@ -20,8 +17,8 @@ public class SteeringAgent : MonoBehaviour
     [SerializeField] protected bool lockRotationToY = true;
     [SerializeField] protected bool lockMovementToXZ = true;
     [SerializeField] protected bool showDebugRays = true;
-    protected Vector3 lastSteeringForce = Vector3.zero;
 
+    protected Vector3 lastSteeringForce = Vector3.zero;
     protected Vector3 acceleration = Vector3.zero;
     protected float initialY = 0f;
 
@@ -55,9 +52,6 @@ public class SteeringAgent : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Aplica una fuerza contraria a la velocidad actual mediante steering para desacelerar progresivamente hacia cero.
-    /// </summary>
     public void Stop()
     {
         if (velocity.sqrMagnitude < 0.0001f)
@@ -71,9 +65,6 @@ public class SteeringAgent : MonoBehaviour
         ApplyForce(Vector3.ClampMagnitude(steeringForce, maxSteering));
     }
 
-    /// <summary>
-    /// Resetea inmediatamente la velocidad y aceleración a cero (para muerte, reposicionamiento o respawn).
-    /// </summary>
     public void ResetMotion()
     {
         velocity = Vector3.zero;
@@ -85,6 +76,7 @@ public class SteeringAgent : MonoBehaviour
         IntegrateForces(Time.deltaTime);
         ClampToPlane();
         FaceVelocity(Time.deltaTime);
+
         if (showDebugRays)
         {
             Debug.DrawRay(transform.position, velocity, Color.cyan);
@@ -92,9 +84,6 @@ public class SteeringAgent : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Integra la aceleración acumulada limitada por maxSteering, actualiza la velocidad limitada por maxSpeed y traslada al agente.
-    /// </summary>
     protected virtual void IntegrateForces(float deltaTime)
     {
         if (lockMovementToXZ)
@@ -112,9 +101,6 @@ public class SteeringAgent : MonoBehaviour
         acceleration = Vector3.zero;
     }
 
-    /// <summary>
-    /// Mantiene la posición del agente fija en la altura inicial si lockMovementToXZ está activado.
-    /// </summary>
     protected virtual void ClampToPlane()
     {
         if (lockMovementToXZ)
@@ -125,9 +111,6 @@ public class SteeringAgent : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Orienta suavemente al agente hacia la dirección de su vector de velocidad.
-    /// </summary>
     protected virtual void FaceVelocity(float deltaTime)
     {
         Vector3 lookDirection = velocity;

@@ -2,10 +2,6 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// Gestiona la reaparición diferida del Boid.
-/// Oculta renderers y colisionadores, espera el delay configurado y reposiciona dentro de SimulationBounds.
-/// </summary>
 public class BoidRespawner : MonoBehaviour
 {
     [Header("Configuración de Respawn")]

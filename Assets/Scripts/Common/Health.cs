@@ -1,10 +1,6 @@
 using System;
 using UnityEngine;
 
-/// <summary>
-/// Componente reutilizable de salud para agentes y entidades de la simulación.
-/// Emite eventos desacoplados al recibir daño o morir.
-/// </summary>
 public class Health : MonoBehaviour
 {
     [Header("Configuración de Salud")]

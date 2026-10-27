@@ -1,14 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Panel HUD en tiempo de ejecución para verificar todos los requerimientos de feedback de la consigna (1.4):
-/// - Estado actual de la FSM y modo visual del Cazador.
-/// - Objetivo activo y progreso de recolección.
-/// - Agentes Boids detectados en rango (vivos y caídos).
-/// - Cooldown TBA restante y POIs activos (x/5).
-/// - Registro histórico de cambios de estado y acciones ejecutadas.
-/// </summary>
 public class SimulationHUD : MonoBehaviour
 {
     [Header("Configuración")]

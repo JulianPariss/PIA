@@ -1,11 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Estado de combate del Cazador. Evalúa distancias en el plano XZ respecto al objetivo activo (Blackboard)
-/// para ejecutar ataque cuerpo a cuerpo, a distancia o persecución (Pursuit).
-/// Mantiene una ventana de tiempo perceptible (0.4s) en color Rojo para evidenciar el golpe,
-/// preserva el TBA si la presa sale del rango de visión (R7) y registra LastDamagedTarget para asegurar bajas (R2).
-/// </summary>
 public class AttackState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
@@ -44,7 +38,6 @@ public class AttackState : State<HunterStateId>
 
     public override void Tick()
     {
-        // Si el golpe ya se asestó, sostiene la postura y el color rojo durante attackDuration para evidencia visual
         if (isAttacking)
         {
             hunter.Agent.Stop();
@@ -79,7 +72,6 @@ public class AttackState : State<HunterStateId>
             return;
         }
 
-        // Condición R7: Si el objetivo escapó de la visión, regresa a Patrol sin reiniciar el TBA
         if (!hunter.IsInVision(target))
         {
             fsm.ChangeState(HunterStateId.Patrol);
@@ -104,7 +96,6 @@ public class AttackState : State<HunterStateId>
             return;
         }
 
-        // Mientras se aproxima hacia la presa para entrar en rango: Verde Agua (Persecución)
         hunter.SetVisualMode(HunterVisualMode.Pursuit);
         Vector3 pursuitForce = SteeringBehaviors.Pursuit(hunter.Agent, target);
         pursuitForce.y = 0f;

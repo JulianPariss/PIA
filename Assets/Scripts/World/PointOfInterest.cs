@@ -1,9 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Objeto de interés en el escenario. Posee salud administrada por el componente Health,
-/// es detectado localmente por los sensores de los Boids y se destruye al agotarse su vida.
-/// </summary>
 [RequireComponent(typeof(Health))]
 public class PointOfInterest : MonoBehaviour
 {
@@ -27,6 +23,7 @@ public class PointOfInterest : MonoBehaviour
         {
             health.OnDied += HandleDied;
         }
+
         if (!TryGetComponent<WorldHealthBar>(out _))
         {
             gameObject.AddComponent<WorldHealthBar>();

@@ -2,15 +2,11 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Componente encargado de gestionar la generación periódica de Puntos de Interés (cebos)
-/// y mantener un límite estricto de instancias activas simultáneas en la simulación.
-/// </summary>
 public class POISpawner : MonoBehaviour
 {
     [Header("Configuración de Spawn")]
     [SerializeField] private GameObject poiPrefab = null;
-    [SerializeField] private float spawnInterval = 5f;
+    [SerializeField] private float spawnInterval = 6f;
     [SerializeField] private int maxActivePOIs = 5;
 
     private float timer = 0f;

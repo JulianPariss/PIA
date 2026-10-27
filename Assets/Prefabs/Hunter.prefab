@@ -163,6 +163,7 @@ MonoBehaviour:
   rotationSpeed: 10
   lockRotationToY: 1
   lockMovementToXZ: 1
+  showDebugRays: 1
 --- !u!114 &5045112830788790895
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -175,9 +176,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ee294f8f3f26514d9e6f87cfdc6b8a1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HunterNPC
-  TBA: 2
-  RangeAttackRadius: 10
-  MeleeAttackRadius: 2.5
+  tba: 2
+  rangeAttackRadius: 10
+  meleeAttackRadius: 2.5
   waypoints: []
   poiSpawner: {fileID: 0}
   visionRadius: 15
@@ -187,9 +188,11 @@ MonoBehaviour:
     mode: 0
     poiDropOffset: 1.5
     pursuitWhileCooldown: 1
+    pursuitDamping: 0.85
   attackData:
     meleeDamage: 40
     rangedDamage: 20
+    attackDuration: 0.4
   gatherData:
     duration: 3
     arrivalDistance: 2
@@ -206,7 +209,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::POISpawner
   poiPrefab: {fileID: 8484664798431356004, guid: 4e5903da08eeb864bbafaedcfa6db3b3, type: 3}
-  spawnInterval: 5
+  spawnInterval: 3
   maxActivePOIs: 5
 --- !u!1 &9036234901603189011
 GameObject:

@@ -1,10 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Barra de salud proyectada en el espacio del mundo para Boids y Puntos de Interés (POIs).
-/// Se posiciona sobre el agente, se orienta hacia la cámara y refleja en tiempo real el valor de Health.
-/// Se oculta automáticamente cuando la salud llega a 0 o el objeto está inactivo.
-/// </summary>
 public class WorldHealthBar : MonoBehaviour
 {
     [Header("Configuración")]
@@ -63,23 +58,20 @@ public class WorldHealthBar : MonoBehaviour
         Vector3 worldPos = transform.position + Vector3.up * heightOffset;
         Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
 
-        if (screenPos.z <= 0.5f) return; // Detrás de la cámara
+        if (screenPos.z <= 0.5f) return;
 
         float x = screenPos.x - (barWidth * 0.5f);
         float y = Screen.height - screenPos.y - (barHeight * 0.5f);
 
-        // Borde
         if (showBorder)
         {
             GUI.color = Color.black;
             GUI.DrawTexture(new Rect(x - 1, y - 1, barWidth + 2, barHeight + 2), borderTexture);
         }
 
-        // Fondo oscuro
         GUI.color = new Color(0.15f, 0.15f, 0.15f, 0.85f);
         GUI.DrawTexture(new Rect(x, y, barWidth, barHeight), bgTexture);
 
-        // Relleno de salud con degradado Verde -> Amarillo -> Rojo
         float normalized = Mathf.Clamp01(health.Normalized);
         float fillW = barWidth * normalized;
 

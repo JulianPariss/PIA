@@ -1,10 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Estado de recolección para el Cazador. Se desplaza mediante Arrive hacia un Boid caído (Blackboard)
-/// y permanece detenido en el lugar durante un tiempo determinado antes de recolectarlo (haciéndolo desaparecer).
-/// Expone el progreso de recolección y aborta limpiamente si el objetivo deja de estar disponible.
-/// </summary>
 public class GatherState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
@@ -50,19 +45,38 @@ public class GatherState : State<HunterStateId>
         hunterFlat.y = 0f;
         targetFlat.y = 0f;
         float distance = Vector3.Distance(hunterFlat, targetFlat);
+        float slowingRadius = Mathf.Max(5.5f, data.arrivalDistance * 2.5f);
+        float cancelDistance = data.arrivalDistance * 1.8f;
 
         if (distance > data.arrivalDistance)
         {
-            gatherTimer = 0f;
+            if (distance > cancelDistance)
+            {
+                gatherTimer = 0f;
+            }
+
             Vector3 targetMovePos = target.transform.position;
             targetMovePos.y = hunter.transform.position.y;
-            Vector3 arriveForce = SteeringBehaviors.Arrive(hunter.Agent, targetMovePos, data.arrivalDistance * 1.5f);
+            Vector3 arriveForce = SteeringBehaviors.Arrive(hunter.Agent, targetMovePos, slowingRadius);
             arriveForce.y = 0f;
             hunter.Agent.ApplyForce(arriveForce);
-            return;
+
+            if (gatherTimer <= 0f) return;
         }
 
         hunter.Agent.Stop();
+        if (hunter.Agent.Velocity.sqrMagnitude < 1.0f)
+        {
+            hunter.Agent.ResetMotion();
+        }
+
+        Vector3 toTarget = targetFlat - hunterFlat;
+        if (toTarget.sqrMagnitude > 0.001f)
+        {
+            Quaternion lookRotation = Quaternion.LookRotation(toTarget.normalized);
+            hunter.transform.rotation = Quaternion.Slerp(hunter.transform.rotation, lookRotation, hunter.Agent.RotationSpeed * Time.deltaTime);
+        }
+
         gatherTimer += Time.deltaTime;
 
         if (gatherTimer >= data.duration)

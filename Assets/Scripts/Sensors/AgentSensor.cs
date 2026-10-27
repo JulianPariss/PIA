@@ -2,11 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Sensor basado en triggers físicos para agentes autónomos.
-/// Resuelve y almacena componentes una sola vez en eventos de colisión (OnTriggerEnter/Exit),
-/// eliminando Physics.OverlapSphere y llamadas continuas a GetComponent en Update.
-/// </summary>
 public class AgentSensor : MonoBehaviour
 {
     [Header("Configuración de Detección")]
@@ -20,9 +15,6 @@ public class AgentSensor : MonoBehaviour
     public event Action<Boid> OnBoidEntered;
     public event Action<Boid> OnBoidExited;
 
-    /// <summary>
-    /// Lista de Boids actualmente dentro del volumen del sensor (excluye instancias destruidas o inactivas).
-    /// </summary>
     public IReadOnlyList<Boid> Boids
     {
         get
@@ -32,9 +24,6 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Lista de POIs actualmente dentro del volumen del sensor (excluye instancias destruidas, inactivas o sin vida).
-    /// </summary>
     public IReadOnlyList<PointOfInterest> POIs
     {
         get
@@ -44,9 +33,6 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Referencia al Cazador si está actualmente en el sensor y activo.
-    /// </summary>
     public HunterNPC Hunter
     {
         get
@@ -59,9 +45,6 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Radio actual del SphereCollider del sensor.
-    /// </summary>
     public float Radius
     {
         get => sensorCollider != null ? sensorCollider.radius : 0f;
@@ -81,9 +64,6 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Sincroniza dinámicamente el radio del SphereCollider del sensor con el rango del agente.
-    /// </summary>
     public void SetRadius(float radius)
     {
         if (sensorCollider == null)
@@ -101,7 +81,6 @@ public class AgentSensor : MonoBehaviour
     {
         if (((1 << other.gameObject.layer) & detectionMask) == 0) return;
 
-        // 1. Detección de Boid
         Boid boid = other.GetComponent<Boid>() ?? other.GetComponentInParent<Boid>();
         if (boid != null)
         {
@@ -115,7 +94,6 @@ public class AgentSensor : MonoBehaviour
             return;
         }
 
-        // 2. Detección de Cazador
         HunterNPC hunter = other.GetComponent<HunterNPC>() ?? other.GetComponentInParent<HunterNPC>();
         if (hunter != null)
         {
@@ -125,7 +103,6 @@ public class AgentSensor : MonoBehaviour
             return;
         }
 
-        // 3. Detección de POI
         PointOfInterest poi = other.GetComponent<PointOfInterest>() ?? other.GetComponentInParent<PointOfInterest>();
         if (poi != null)
         {
@@ -139,7 +116,6 @@ public class AgentSensor : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
-        // 1. Salida de Boid
         Boid boid = other.GetComponent<Boid>() ?? other.GetComponentInParent<Boid>();
         if (boid != null)
         {
@@ -150,7 +126,6 @@ public class AgentSensor : MonoBehaviour
             return;
         }
 
-        // 2. Salida de Cazador
         HunterNPC hunter = other.GetComponent<HunterNPC>() ?? other.GetComponentInParent<HunterNPC>();
         if (hunter != null)
         {
@@ -161,7 +136,6 @@ public class AgentSensor : MonoBehaviour
             return;
         }
 
-        // 3. Salida de POI
         PointOfInterest poi = other.GetComponent<PointOfInterest>() ?? other.GetComponentInParent<PointOfInterest>();
         if (poi != null)
         {
@@ -170,9 +144,6 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Limpia todas las listas y referencias detectadas por el sensor.
-    /// </summary>
     public void Clear()
     {
         detectedBoids.Clear();

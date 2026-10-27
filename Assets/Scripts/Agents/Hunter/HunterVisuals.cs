@@ -1,11 +1,6 @@
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// Componente de feedback visual para el NPC Cazador.
-/// Administra la línea de fijación hacia el objetivo activo, el haz de disparo para ataques a distancia,
-/// el impacto de escala para ataques cuerpo a cuerpo y la coloración vía MaterialPropertyBlock.
-/// </summary>
 [RequireComponent(typeof(HunterNPC))]
 public class HunterVisuals : MonoBehaviour
 {
@@ -68,7 +63,6 @@ public class HunterVisuals : MonoBehaviour
         lr.startColor = color;
         lr.endColor = color;
 
-        // Shader estándar unlit / sprite default
         Shader unlitShader = Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
         if (unlitShader != null)
         {
