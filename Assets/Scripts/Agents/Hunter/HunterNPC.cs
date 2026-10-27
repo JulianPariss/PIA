@@ -56,6 +56,11 @@ public class HunterNPC : MonoBehaviour
     private int currentWaypointIndex = 0;
     private bool isPatrolReversed = false;
     private Renderer[] meshRenderers;
+    private MaterialPropertyBlock propBlock;
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    public HunterVisualMode CurrentVisualMode { get; private set; } = HunterVisualMode.Patrol;
+    public float GatherProgress => (FSM != null && FSM.CurrentState is GatherState gs) ? gs.Progress : 0f;
 
     protected virtual void Awake()
     {
@@ -76,6 +81,10 @@ public class HunterNPC : MonoBehaviour
         }
 
         meshRenderers = GetComponentsInChildren<Renderer>();
+        propBlock = new MaterialPropertyBlock();
+        if (!TryGetComponent<HunterVisuals>(out _)) gameObject.AddComponent<HunterVisuals>();
+        if (!TryGetComponent<HunterStateLabel>(out _)) gameObject.AddComponent<HunterStateLabel>();
+        if (!TryGetComponent<SimulationHUD>(out _)) gameObject.AddComponent<SimulationHUD>();
 
         if (!CompareTag("Hunter"))
         {
@@ -144,11 +153,16 @@ public class HunterNPC : MonoBehaviour
             _ => Color.white
         };
 
+        CurrentVisualMode = mode;
+        if (propBlock == null) propBlock = new MaterialPropertyBlock();
         for (int i = 0; i < meshRenderers.Length; i++)
         {
-            if (meshRenderers[i] != null && meshRenderers[i].material != null)
+            if (meshRenderers[i] != null && meshRenderers[i].sharedMaterial != null)
             {
-                meshRenderers[i].material.color = targetColor;
+                meshRenderers[i].GetPropertyBlock(propBlock);
+                propBlock.SetColor(BaseColorId, targetColor);
+                propBlock.SetColor(ColorId, targetColor);
+                meshRenderers[i].SetPropertyBlock(propBlock);
             }
         }
     }

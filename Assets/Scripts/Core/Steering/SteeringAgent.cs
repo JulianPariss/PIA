@@ -19,6 +19,8 @@ public class SteeringAgent : MonoBehaviour
     [SerializeField] private float rotationSpeed = 10f;
     [SerializeField] protected bool lockRotationToY = true;
     [SerializeField] protected bool lockMovementToXZ = true;
+    [SerializeField] protected bool showDebugRays = true;
+    protected Vector3 lastSteeringForce = Vector3.zero;
 
     protected Vector3 acceleration = Vector3.zero;
     protected float initialY = 0f;
@@ -83,6 +85,11 @@ public class SteeringAgent : MonoBehaviour
         IntegrateForces(Time.deltaTime);
         ClampToPlane();
         FaceVelocity(Time.deltaTime);
+        if (showDebugRays)
+        {
+            Debug.DrawRay(transform.position, velocity, Color.cyan);
+            Debug.DrawRay(transform.position + Vector3.up * 0.1f, lastSteeringForce, Color.yellow);
+        }
     }
 
     /// <summary>
@@ -97,6 +104,7 @@ public class SteeringAgent : MonoBehaviour
         }
 
         Vector3 clampedAcceleration = Vector3.ClampMagnitude(acceleration, maxSteering);
+        lastSteeringForce = clampedAcceleration;
         velocity += clampedAcceleration * deltaTime;
         velocity = Vector3.ClampMagnitude(velocity, maxSpeed);
         transform.position += velocity * deltaTime;
