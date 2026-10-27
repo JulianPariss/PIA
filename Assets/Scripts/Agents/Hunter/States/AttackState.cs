@@ -1,35 +1,47 @@
-/// <summary>
-/// Estado de combate del Cazador. Evalúa distancias en el plano XZ para atacar con rangos de histéresis y ventanas de tiempo mínimas.
-/// </summary>
 using UnityEngine;
 
-public class AttackState : IState
+/// <summary>
+/// Estado de combate del Cazador. Evalúa distancias en el plano XZ respecto al objetivo activo (Blackboard)
+/// para ejecutar ataque cuerpo a cuerpo, a distancia o persecución (Pursuit).
+/// </summary>
+public class AttackState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
-    private readonly Boid target;
+    private readonly AttackData data;
 
-    public float meleeDamage = 40f;
-    public float rangedDamage = 20f;
-
-    public AttackState(HunterNPC hunter, Boid target)
+    public AttackState(StateMachine<HunterStateId> fsm, HunterNPC hunter, AttackData data) : base(fsm)
     {
         this.hunter = hunter;
-        this.target = target;
+        this.data = data;
     }
 
-    public void Enter() { }
-
-    public void UpdateState()
+    public override void Enter()
     {
-        if (target == null)
+        Boid target = hunter.CurrentTarget;
+        if (target == null || target.isRespawning)
         {
-            hunter.FSM.ChangeState(new PatrolState(hunter), force: true);
+            fsm.ChangeState(HunterStateId.Patrol);
             return;
         }
 
         if (target.isDead)
         {
-            hunter.FSM.ChangeState(new GatherState(hunter, target), force: true);
+            fsm.ChangeState(HunterStateId.Gather);
+        }
+    }
+
+    public override void Tick()
+    {
+        Boid target = hunter.CurrentTarget;
+        if (target == null || target.isRespawning)
+        {
+            fsm.ChangeState(HunterStateId.Patrol);
+            return;
+        }
+
+        if (target.isDead)
+        {
+            fsm.ChangeState(HunterStateId.Gather);
             return;
         }
 
@@ -39,23 +51,22 @@ public class AttackState : IState
         targetFlat.y = 0f;
         float distance = Vector3.Distance(hunterFlat, targetFlat);
 
-        float escapeRadius = hunter.visionRadius * 1.25f;
-
-        if (distance > escapeRadius && hunter.FSM.CanChangeState)
+        // Si el objetivo escapó de la visión: regresa a Patrol sin reiniciar TBA (regla canónica)
+        if (distance > hunter.VisionRadius)
         {
-            hunter.FSM.ChangeState(new PatrolState(hunter));
+            fsm.ChangeState(HunterStateId.Patrol);
             return;
         }
 
         if (distance <= hunter.MeleeAttackRadius)
         {
-            ExecuteMeleeAttack();
+            ExecuteAttack(target, data.meleeDamage);
             return;
         }
 
         if (distance <= hunter.RangeAttackRadius)
         {
-            ExecuteRangedAttack();
+            ExecuteAttack(target, data.rangedDamage);
             return;
         }
 
@@ -64,33 +75,18 @@ public class AttackState : IState
         hunter.Agent.ApplyForce(pursuitForce);
     }
 
-    private void ExecuteMeleeAttack()
+    private void ExecuteAttack(Boid target, float damage)
     {
-        target.TakeDamage(meleeDamage);
-        hunter.lastAttackTime = Time.time;
+        target.TakeDamage(damage);
+        hunter.ResetAttackCooldown();
+
         if (target.isDead)
         {
-            hunter.FSM.ChangeState(new GatherState(hunter, target), force: true);
+            fsm.ChangeState(HunterStateId.Gather);
         }
         else
         {
-            hunter.FSM.ChangeState(new PatrolState(hunter), force: true);
+            fsm.ChangeState(HunterStateId.Patrol);
         }
     }
-
-    private void ExecuteRangedAttack()
-    {
-        target.TakeDamage(rangedDamage);
-        hunter.lastAttackTime = Time.time;
-        if (target.isDead)
-        {
-            hunter.FSM.ChangeState(new GatherState(hunter, target), force: true);
-        }
-        else
-        {
-            hunter.FSM.ChangeState(new PatrolState(hunter), force: true);
-        }
-    }
-
-    public void Exit() { }
 }

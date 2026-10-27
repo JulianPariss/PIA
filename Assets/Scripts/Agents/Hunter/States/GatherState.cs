@@ -1,36 +1,37 @@
-/// <summary>
-/// Estado de recolección para el Cazador. Navega en el plano XZ hacia un Boid muerto y lo recolecta al cabo de un tiempo determinado.
-/// </summary>
 using UnityEngine;
 
-public class GatherState : IState
+/// <summary>
+/// Estado de recolección para el Cazador. Se desplaza mediante Arrive hacia un Boid caído (Blackboard)
+/// y permanece en el lugar durante un tiempo determinado antes de recolectarlo (haciéndolo desaparecer).
+/// </summary>
+public class GatherState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
-    private readonly Boid target;
-
-    public float gatherDuration = 3f;
-    public float gatherArrivalDistance = 2f;
-
+    private readonly GatherData data;
     private float gatherTimer = 0f;
 
-    public GatherState(HunterNPC hunter, Boid target, float gatherDuration = 3f, float gatherArrivalDistance = 2f)
+    public GatherState(StateMachine<HunterStateId> fsm, HunterNPC hunter, GatherData data) : base(fsm)
     {
         this.hunter = hunter;
-        this.target = target;
-        this.gatherDuration = gatherDuration;
-        this.gatherArrivalDistance = gatherArrivalDistance;
+        this.data = data;
     }
 
-    public void Enter()
+    public override void Enter()
     {
         gatherTimer = 0f;
+        Boid target = hunter.CurrentTarget;
+        if (target == null || !target.isDead || target.isRespawning)
+        {
+            fsm.ChangeState(HunterStateId.Patrol);
+        }
     }
 
-    public void UpdateState()
+    public override void Tick()
     {
-        if (target == null || !target.isDead)
+        Boid target = hunter.CurrentTarget;
+        if (target == null || !target.isDead || target.isRespawning)
         {
-            hunter.FSM.ChangeState(new PatrolState(hunter), force: true);
+            fsm.ChangeState(HunterStateId.Patrol);
             return;
         }
 
@@ -40,12 +41,12 @@ public class GatherState : IState
         targetFlat.y = 0f;
         float distance = Vector3.Distance(hunterFlat, targetFlat);
 
-        if (distance > gatherArrivalDistance)
+        if (distance > data.arrivalDistance)
         {
             gatherTimer = 0f;
             Vector3 targetMovePos = target.transform.position;
             targetMovePos.y = hunter.transform.position.y;
-            Vector3 arriveForce = SteeringBehaviors.Arrive(hunter.Agent, targetMovePos, gatherArrivalDistance * 1.5f);
+            Vector3 arriveForce = SteeringBehaviors.Arrive(hunter.Agent, targetMovePos, data.arrivalDistance * 1.5f);
             arriveForce.y = 0f;
             hunter.Agent.ApplyForce(arriveForce);
             return;
@@ -54,14 +55,15 @@ public class GatherState : IState
         hunter.Agent.Stop();
         gatherTimer += Time.deltaTime;
 
-        if (gatherTimer >= gatherDuration)
+        if (gatherTimer >= data.duration)
         {
-            target.StartDelayedRespawn();
-            hunter.FSM.ChangeState(new PatrolState(hunter), force: true);
+            target.Collect();
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Patrol);
         }
     }
 
-    public void Exit()
+    public override void Exit()
     {
         gatherTimer = 0f;
     }

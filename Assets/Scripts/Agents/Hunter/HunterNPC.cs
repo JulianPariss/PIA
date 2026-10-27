@@ -1,46 +1,61 @@
-/// <summary>
-/// Controlador principal del NPC Cazador. Administra la FSM, variables de ataque, generación de POIs, gizmos de percepción/ataque y cambios de color según el estado activo.
-/// </summary>
 using System;
 using UnityEngine;
 
-[RequireComponent(typeof(HunterFSM))]
+/// <summary>
+/// Controlador principal del NPC Cazador. Administra la FSM basada en enum, parámetros de ataque,
+/// generación de POIs, blackboard de objetivos y feedback de color por estado.
+/// </summary>
 [RequireComponent(typeof(SteeringAgent))]
 public class HunterNPC : MonoBehaviour
 {
     [Header("Parámetros de Ataque")]
-    public float TBA = 2.5f;
-    [HideInInspector] public float lastAttackTime = 0f;
-    public bool IsTBAReady => Time.time >= lastAttackTime + TBA;
+    [SerializeField] public float TBA = 2.5f;
+    [SerializeField] public float RangeAttackRadius = 10f;
+    [SerializeField] public float MeleeAttackRadius = 2.5f;
+    private float lastAttackTime = 0f;
 
-    public float RangeAttackRadius = 10f;
-    public float MeleeAttackRadius = 2.5f;
+    public bool IsTBAReady => Time.time >= lastAttackTime + TBA;
+    public void ResetAttackCooldown() => lastAttackTime = Time.time;
 
     [Header("Ruta de Patrullaje")]
-    public Transform[] waypoints;
+    [SerializeField] private Transform[] waypoints = Array.Empty<Transform>();
+    public Transform[] Waypoints => waypoints;
 
     [Header("Prefabs y Spawn de POI")]
-    public GameObject poiPrefab;
-    public GameObject[] poiPrefabs;
-    public float poiSpawnInterval = 5f;
-    [HideInInspector] public float poiTimer = 0f;
+    [SerializeField] private GameObject poiPrefab = null;
+    [SerializeField] private GameObject[] poiPrefabs = Array.Empty<GameObject>();
+    [SerializeField] private float poiSpawnInterval = 5f;
+    private float poiTimer = 0f;
 
     [Header("Detección y Sensor")]
-    public string targetTag = "Boid";
-    public float visionRadius = 15f;
+    [SerializeField] private float visionRadius = 15f;
     [SerializeField] private AgentSensor sensor;
     public AgentSensor Sensor => sensor;
+    public float VisionRadius => visionRadius;
 
-    public HunterFSM FSM { get; private set; }
+    [Header("Configuración de Estados")]
+    [SerializeField] private PatrolData patrolData = new PatrolData();
+    [SerializeField] private AttackData attackData = new AttackData();
+    [SerializeField] private GatherData gatherData = new GatherData();
+
+    public PatrolData PatrolConfig => patrolData;
+    public AttackData AttackConfig => attackData;
+    public GatherData GatherConfig => gatherData;
+
+    // Blackboard
+    public Boid CurrentTarget { get; set; }
+
+    public StateMachine<HunterStateId> FSM { get; private set; }
     public SteeringAgent Agent { get; private set; }
 
     private int currentWaypointIndex = 0;
+    private bool isPatrolReversed = false;
     private Renderer[] meshRenderers;
 
     protected virtual void Awake()
     {
-        FSM = GetComponent<HunterFSM>();
         Agent = GetComponent<SteeringAgent>();
+
         if (sensor == null)
         {
             sensor = GetComponentInChildren<AgentSensor>();
@@ -49,31 +64,34 @@ public class HunterNPC : MonoBehaviour
         {
             sensor.SetRadius(visionRadius);
         }
+
         meshRenderers = GetComponentsInChildren<Renderer>();
 
         if (!CompareTag("Hunter"))
         {
             try { gameObject.tag = "Hunter"; } catch (Exception) { }
         }
+
+        // FSM: Registración única de estados (cero allocations en runtime)
+        FSM = new StateMachine<HunterStateId>();
+        FSM.Register(HunterStateId.Patrol, new PatrolState(FSM, this, patrolData));
+        FSM.Register(HunterStateId.Attack, new AttackState(FSM, this, attackData));
+        FSM.Register(HunterStateId.Gather, new GatherState(FSM, this, gatherData));
+        FSM.OnStateChanged += HandleStateChanged;
     }
 
     protected virtual void Start()
     {
-        lastAttackTime = Time.time;
+        ResetAttackCooldown();
         poiTimer = poiSpawnInterval * 0.6f;
 
-        if (FSM != null)
-        {
-            FSM.OnStateChanged += HandleStateChanged;
-            if (FSM.CurrentState == null)
-            {
-                FSM.ChangeState(new PatrolState(this), force: true);
-            }
-            else
-            {
-                UpdateStateColor(FSM.CurrentState);
-            }
-        }
+        FSM.ChangeState(HunterStateId.Patrol);
+        UpdateStateColor(HunterStateId.Patrol);
+    }
+
+    protected virtual void Update()
+    {
+        FSM.Tick();
     }
 
     private void OnDestroy()
@@ -84,28 +102,22 @@ public class HunterNPC : MonoBehaviour
         }
     }
 
-    private void HandleStateChanged(IState previousState, IState newState)
+    private void HandleStateChanged(HunterStateId previousState, HunterStateId newState)
     {
         UpdateStateColor(newState);
     }
 
-    private void UpdateStateColor(IState state)
+    private void UpdateStateColor(HunterStateId stateId)
     {
-        if (state == null || meshRenderers == null) return;
+        if (meshRenderers == null) return;
 
-        Color targetColor = Color.white;
-        if (state is PatrolState)
+        Color targetColor = stateId switch
         {
-            targetColor = Color.green;
-        }
-        else if (state is AttackState)
-        {
-            targetColor = Color.red;
-        }
-        else if (state is GatherState)
-        {
-            targetColor = Color.yellow;
-        }
+            HunterStateId.Patrol => Color.green,
+            HunterStateId.Attack => Color.red,
+            HunterStateId.Gather => Color.yellow,
+            _ => Color.white
+        };
 
         for (int i = 0; i < meshRenderers.Length; i++)
         {
@@ -114,6 +126,18 @@ public class HunterNPC : MonoBehaviour
                 meshRenderers[i].material.color = targetColor;
             }
         }
+    }
+
+    public void TickPOITimer(float deltaTime)
+    {
+        poiTimer += deltaTime;
+    }
+
+    public bool CanSpawnPOIByTimer => poiTimer >= poiSpawnInterval;
+
+    public void ResetPOITimer()
+    {
+        poiTimer = 0f;
     }
 
     public GameObject SpawnPOI(Vector3 position)
@@ -139,21 +163,49 @@ public class HunterNPC : MonoBehaviour
         while (checkedCount < waypoints.Length)
         {
             if (currentWaypointIndex >= waypoints.Length) currentWaypointIndex = 0;
+            if (currentWaypointIndex < 0) currentWaypointIndex = waypoints.Length - 1;
+
             if (waypoints[currentWaypointIndex] != null)
             {
                 return waypoints[currentWaypointIndex];
             }
-            currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+
+            AdvanceToNextWaypoint(patrolData.mode);
             checkedCount++;
         }
 
         return null;
     }
 
-    public void AdvanceToNextWaypoint()
+    public void AdvanceToNextWaypoint(PatrolMode mode)
     {
-        if (waypoints == null || waypoints.Length == 0) return;
-        currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+        if (waypoints == null || waypoints.Length <= 1) return;
+
+        if (mode == PatrolMode.Loop)
+        {
+            currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+        }
+        else // PingPong
+        {
+            if (isPatrolReversed)
+            {
+                currentWaypointIndex--;
+                if (currentWaypointIndex <= 0)
+                {
+                    currentWaypointIndex = 0;
+                    isPatrolReversed = false;
+                }
+            }
+            else
+            {
+                currentWaypointIndex++;
+                if (currentWaypointIndex >= waypoints.Length - 1)
+                {
+                    currentWaypointIndex = waypoints.Length - 1;
+                    isPatrolReversed = true;
+                }
+            }
+        }
     }
 
     private void OnDrawGizmos()

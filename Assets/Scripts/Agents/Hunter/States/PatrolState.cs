@@ -1,112 +1,119 @@
-/// <summary>
-/// Estado de patrullaje para el Cazador. Recorre waypoints en el plano XZ y genera POIs periódicamente sin obstruir el movimiento.
-/// Utiliza AgentSensor para percibir boids vivos y eliminados sin llamadas a OverlapSphere ni GetComponent.
-/// </summary>
 using UnityEngine;
 
-public class PatrolState : IState
+/// <summary>
+/// Estado de patrullaje para el Cazador. Recorre waypoints según el modo configurado y suelta POIs periódicamente.
+/// Utiliza AgentSensor para detectar boids vivos o muertos y transiciona por enum a Attack o Gather.
+/// </summary>
+public class PatrolState : State<HunterStateId>
 {
     private readonly HunterNPC hunter;
-    private readonly float waypointArrivalDistance;
+    private readonly PatrolData data;
 
-    public PatrolState(HunterNPC hunter, float waypointArrivalDistance = 1.5f)
+    public PatrolState(StateMachine<HunterStateId> fsm, HunterNPC hunter, PatrolData data) : base(fsm)
     {
         this.hunter = hunter;
-        this.waypointArrivalDistance = waypointArrivalDistance;
+        this.data = data;
     }
 
-    public void Enter() { }
-
-    public void UpdateState()
+    public override void Enter()
     {
-        hunter.poiTimer += Time.deltaTime;
-        if (hunter.poiTimer >= hunter.poiSpawnInterval)
+        hunter.CurrentTarget = null;
+    }
+
+    public override void Tick()
+    {
+        UpdatePOISpawn();
+
+        CheckSensorTargets(out Boid closestLiving, out Boid closestDead);
+
+        // Prioridad 1: Si hay un boid muerto para recolectar
+        if (closestDead != null)
         {
-            hunter.poiTimer = 0f;
-            if (PointOfInterest.CanSpawnPOI)
-            {
-                Vector3 spawnPos = hunter.transform.position - (hunter.transform.forward * 1.5f);
-                hunter.SpawnPOI(spawnPos);
-            }
+            hunter.CurrentTarget = closestDead;
+            fsm.ChangeState(HunterStateId.Gather);
+            return;
         }
 
-        Boid closestLivingBoid = null;
-        Boid closestDeadBoid = null;
+        // Prioridad 2: Si el TBA está listo y hay un boid vivo
+        if (closestLiving != null && hunter.IsTBAReady)
+        {
+            hunter.CurrentTarget = closestLiving;
+            fsm.ChangeState(HunterStateId.Attack);
+            return;
+        }
+
+        FollowWaypoints();
+    }
+
+    private void UpdatePOISpawn()
+    {
+        hunter.TickPOITimer(Time.deltaTime);
+        if (!hunter.CanSpawnPOIByTimer) return;
+
+        hunter.ResetPOITimer();
+        if (PointOfInterest.CanSpawnPOI)
+        {
+            Vector3 spawnPos = hunter.transform.position - (hunter.transform.forward * data.poiDropOffset);
+            hunter.SpawnPOI(spawnPos);
+        }
+    }
+
+    private void CheckSensorTargets(out Boid closestLiving, out Boid closestDead)
+    {
+        closestLiving = null;
+        closestDead = null;
+
+        if (hunter.Sensor == null) return;
+
         float minLivingDistSqr = float.MaxValue;
         float minDeadDistSqr = float.MaxValue;
+        var boids = hunter.Sensor.Boids;
 
-        if (hunter.Sensor != null)
+        for (int i = 0; i < boids.Count; i++)
         {
-            var detectedBoids = hunter.Sensor.Boids;
-            for (int i = 0; i < detectedBoids.Count; i++)
+            Boid boid = boids[i];
+            if (boid == null || boid.isRespawning) continue;
+
+            Vector3 diff = boid.transform.position - hunter.transform.position;
+            diff.y = 0f;
+            float distSqr = diff.sqrMagnitude;
+
+            if (boid.IsAlive && distSqr < minLivingDistSqr)
             {
-                Boid boid = detectedBoids[i];
-                if (boid == null) continue;
-
-                Vector3 toBoid = boid.transform.position - hunter.transform.position;
-                toBoid.y = 0f;
-                float distSqr = toBoid.sqrMagnitude;
-
-                if (!boid.isDead && !boid.isRespawning)
-                {
-                    if (distSqr < minLivingDistSqr)
-                    {
-                        minLivingDistSqr = distSqr;
-                        closestLivingBoid = boid;
-                    }
-                }
-                else if (boid.isDead && !boid.isRespawning)
-                {
-                    if (distSqr < minDeadDistSqr)
-                    {
-                        minDeadDistSqr = distSqr;
-                        closestDeadBoid = boid;
-                    }
-                }
+                minLivingDistSqr = distSqr;
+                closestLiving = boid;
             }
-        }
-
-        if (hunter.FSM.CanChangeState)
-        {
-            if (closestLivingBoid != null && hunter.IsTBAReady)
+            else if (boid.isDead && distSqr < minDeadDistSqr)
             {
-                hunter.FSM.ChangeState(new AttackState(hunter, closestLivingBoid));
-                return;
-            }
-
-            if (closestDeadBoid != null)
-            {
-                hunter.FSM.ChangeState(new GatherState(hunter, closestDeadBoid));
-                return;
-            }
-        }
-
-        Transform currentWaypoint = hunter.GetCurrentWaypoint();
-        if (currentWaypoint != null)
-        {
-            Vector3 hunterPosFlat = hunter.transform.position;
-            Vector3 wpPosFlat = currentWaypoint.position;
-            hunterPosFlat.y = 0f;
-            wpPosFlat.y = 0f;
-
-            float distanceToWp = Vector3.Distance(hunterPosFlat, wpPosFlat);
-
-            if (distanceToWp <= waypointArrivalDistance)
-            {
-                hunter.AdvanceToNextWaypoint();
-                currentWaypoint = hunter.GetCurrentWaypoint();
-            }
-
-            if (currentWaypoint != null)
-            {
-                Vector3 targetWp = currentWaypoint.position;
-                targetWp.y = hunter.transform.position.y;
-                Vector3 moveForce = SteeringBehaviors.Seek(hunter.Agent, targetWp);
-                moveForce.y = 0f;
-                hunter.Agent.ApplyForce(moveForce);
+                minDeadDistSqr = distSqr;
+                closestDead = boid;
             }
         }
     }
 
-    public void Exit() { }
+    private void FollowWaypoints()
+    {
+        Transform currentWp = hunter.GetCurrentWaypoint();
+        if (currentWp == null) return;
+
+        Vector3 hunterPosFlat = hunter.transform.position;
+        Vector3 wpPosFlat = currentWp.position;
+        hunterPosFlat.y = 0f;
+        wpPosFlat.y = 0f;
+
+        if (Vector3.Distance(hunterPosFlat, wpPosFlat) <= data.arrivalDistance)
+        {
+            hunter.AdvanceToNextWaypoint(data.mode);
+            currentWp = hunter.GetCurrentWaypoint();
+        }
+
+        if (currentWp != null)
+        {
+            Vector3 targetPos = currentWp.position;
+            targetPos.y = hunter.transform.position.y;
+            Vector3 seekForce = SteeringBehaviors.Seek(hunter.Agent, targetPos);
+            seekForce.y = 0f;
+            hunter.Agent.ApplyForce(seekForce);
+        }
+    }
 }
