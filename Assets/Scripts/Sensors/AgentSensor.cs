@@ -170,12 +170,22 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Limpia todas las listas y referencias detectadas por el sensor.
+    /// </summary>
+    public void Clear()
+    {
+        detectedBoids.Clear();
+        detectedPOIs.Clear();
+        detectedHunter = null;
+    }
+
     private void PurgeDeadBoids()
     {
         for (int i = detectedBoids.Count - 1; i >= 0; i--)
         {
             Boid b = detectedBoids[i];
-            if (b == null || !b.gameObject.activeInHierarchy)
+            if (b == null || !b.gameObject.activeInHierarchy || b.isRespawning)
             {
                 detectedBoids.RemoveAt(i);
             }

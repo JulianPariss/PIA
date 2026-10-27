@@ -298,6 +298,7 @@ public class Boid : SteeringAgent
         isRespawning = true;
         respawnTimer = 0f;
         SetVisibilityAndPhysics(false);
+        sensor?.Clear();
     }
 
     private void CompleteRespawn()
