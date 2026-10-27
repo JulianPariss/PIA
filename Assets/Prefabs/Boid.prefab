@@ -14,6 +14,9 @@ GameObject:
   - component: {fileID: 7176232497098513114}
   - component: {fileID: 5081553704589499329}
   - component: {fileID: 1632483856349874799}
+  - component: {fileID: 9149310084431599658}
+  - component: {fileID: 8035414659969489786}
+  - component: {fileID: 7744918105848589413}
   m_Layer: 6
   m_Name: Boid
   m_TagString: Boid
@@ -136,32 +139,18 @@ MonoBehaviour:
   rotationSpeed: 10
   lockRotationToY: 1
   lockMovementToXZ: 1
-  maxHealth: 100
-  currentHealth: 100
-  isDead: 0
-  viewRadius: 6
-  separationRadius: 3
-  poiSlowingRadius: 3
-  poiPerceptionRadius: 35
-  sensor: {fileID: 0}
+  health: {fileID: 9149310084431599658}
+  flocking: {fileID: 8035414659969489786}
+  respawner: {fileID: 7744918105848589413}
+  sensor: {fileID: 3085891118719070309}
+  bounds: {fileID: 0}
   poiInteractionRadius: 1.5
+  poiSlowingRadius: 3
   poiDamageAmount: 10
   poiDamageInterval: 1
-  alignmentWeight: 1
-  cohesionWeight: 1
-  separationWeight: 1.5
-  poiWeight: 1.8
   evadeWeight: 2
+  poiWeight: 1.8
   boundaryWeight: 1.5
-  hunterTag: Hunter
-  poiTag: POI
-  boidLayerName: Boid
-  detectionLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  respawnDelay: 5
-  spawnAreaCenter: {x: 0, y: 0, z: 0}
-  spawnAreaSize: {x: 20, y: 0, z: 20}
 --- !u!54 &1632483856349874799
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -189,6 +178,51 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &9149310084431599658
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1824131709523762699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d06b398e6a19c8c4da28c563a744bf75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  maxHealth: 100
+--- !u!114 &8035414659969489786
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1824131709523762699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2e1552d7c5974848b60b1bb55583926, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlockingBehaviour
+  separationRadius: 2.5
+  alignmentRadius: 6
+  cohesionRadius: 8
+  alignmentWeight: 1
+  cohesionWeight: 1
+  separationWeight: 1.4
+--- !u!114 &7744918105848589413
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1824131709523762699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77523566cd9bc2f4ba7ccd773b20dee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BoidRespawner
+  respawnDelay: 5
+  bounds: {fileID: 0}
 --- !u!1 &4146264583222951443
 GameObject:
   m_ObjectHideFlags: 0
@@ -286,4 +320,4 @@ MonoBehaviour:
   detectionMask:
     serializedVersion: 2
     m_Bits: 448
-  sensorCollider: {fileID: 0}
+  sensorCollider: {fileID: 8722869575006112705}
