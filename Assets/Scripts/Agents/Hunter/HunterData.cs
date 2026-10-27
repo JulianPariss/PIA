@@ -11,6 +11,18 @@ public enum PatrolMode
 }
 
 /// <summary>
+/// Modo visual de representación para feedback del Cazador:
+/// Verde (Patrulla waypoints), Verde Agua (Persecución activa), Rojo (Ataque en ejecución) y Amarillo (Recolección).
+/// </summary>
+public enum HunterVisualMode
+{
+    Patrol,
+    Pursuit,
+    Attack,
+    Gather
+}
+
+/// <summary>
 /// Parámetros configurables desde el Inspector para el estado de patrulla del Cazador.
 /// </summary>
 [Serializable]
@@ -24,6 +36,9 @@ public class PatrolData
 
     [Tooltip("Distancia de separación hacia atrás para colocar el POI sin obstruir el movimiento.")]
     public float poiDropOffset = 1.5f;
+
+    [Tooltip("Si está activo, persigue suavemente al objetivo dañado visible mientras transcurre el cooldown de ataque.")]
+    public bool pursuitWhileCooldown = true;
 }
 
 /// <summary>
@@ -36,7 +51,10 @@ public class AttackData
     public float meleeDamage = 40f;
 
     [Tooltip("Daño infligido por ataque a distancia.")]
-    public float rangedDamage = 20f;
+    public float rangedDamage = 25f;
+
+    [Tooltip("Tiempo en segundos que se sostiene visiblemente la ejecución del ataque.")]
+    public float attackDuration = 0.4f;
 }
 
 /// <summary>
