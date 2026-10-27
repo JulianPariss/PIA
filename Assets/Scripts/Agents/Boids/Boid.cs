@@ -1,5 +1,6 @@
 /// <summary>
 /// Agente autónomo Boid. Aplica Flocking sensorial local, prioriza Evade ante el Cazador, selecciona POIs estrictamente por menor distancia geométrica y gestiona su ciclo de vida y reaparición diferida.
+/// Utiliza AgentSensor para percepción local por triggers físicos, eliminando OverlapSphere y el acceso a registros globales de percepción.
 /// </summary>
 using System.Collections.Generic;
 using UnityEngine;
@@ -16,6 +17,10 @@ public class Boid : SteeringAgent
     public float separationRadius = 2.5f;
     public float poiSlowingRadius = 3.5f;
     public float poiPerceptionRadius = 10f;
+
+    [Header("Sensor y Percepción")]
+    [SerializeField] private AgentSensor sensor;
+    public AgentSensor Sensor => sensor;
 
     [Header("Interacción POI")]
     public float poiInteractionRadius = 1.5f;
@@ -59,6 +64,15 @@ public class Boid : SteeringAgent
         lockRotationToY = true;
         lockMovementToXZ = true;
 
+        if (sensor == null)
+        {
+            sensor = GetComponentInChildren<AgentSensor>();
+        }
+        if (sensor != null)
+        {
+            sensor.SetRadius(viewRadius);
+        }
+
         currentHealth = maxHealth;
         boidLayerIndex = LayerMask.NameToLayer(boidLayerName);
         meshRenderers = GetComponentsInChildren<Renderer>();
@@ -87,6 +101,10 @@ public class Boid : SteeringAgent
         {
             separationRadius = viewRadius;
         }
+        if (sensor != null)
+        {
+            sensor.SetRadius(viewRadius);
+        }
     }
 
     protected override void Update()
@@ -108,65 +126,37 @@ public class Boid : SteeringAgent
             return;
         }
 
-        Collider[] hits = Physics.OverlapSphere(transform.position, viewRadius, detectionLayers);
-        Collider hunterCollider = null;
-        float minHunterDistSqr = float.MaxValue;
-
         flockNeighbors.Clear();
         separationNeighbors.Clear();
         float sqrSeparationRadius = separationRadius * separationRadius;
 
-        for (int i = 0; i < hits.Length; i++)
+        HunterNPC detectedHunter = sensor != null ? sensor.Hunter : null;
+
+        if (sensor != null)
         {
-            Collider hit = hits[i];
-            if (hit.gameObject == gameObject) continue;
-
-            if (hit.CompareTag(hunterTag))
+            var detectedBoids = sensor.Boids;
+            for (int i = 0; i < detectedBoids.Count; i++)
             {
-                float distSqr = (hit.transform.position - transform.position).sqrMagnitude;
-                if (distSqr < minHunterDistSqr)
-                {
-                    minHunterDistSqr = distSqr;
-                    hunterCollider = hit;
-                }
-                continue;
-            }
-
-            bool isBoidLayer = (boidLayerIndex != -1 && hit.gameObject.layer == boidLayerIndex);
-            SteeringAgent neighborAgent = hit.GetComponent<SteeringAgent>() ?? hit.GetComponentInParent<SteeringAgent>();
-
-            if (neighborAgent != null && neighborAgent != this && (isBoidLayer || hit.CompareTag(gameObject.tag)))
-            {
-                if (neighborAgent is Boid neighborBoid && (neighborBoid.isDead || neighborBoid.isRespawning))
+                Boid neighbor = detectedBoids[i];
+                if (neighbor == null || neighbor == this || neighbor.isDead || neighbor.isRespawning)
                 {
                     continue;
                 }
 
-                flockNeighbors.Add(neighborAgent);
+                flockNeighbors.Add(neighbor);
 
-                float distSqr = (neighborAgent.transform.position - transform.position).sqrMagnitude;
+                float distSqr = (neighbor.transform.position - transform.position).sqrMagnitude;
                 if (distSqr <= sqrSeparationRadius)
                 {
-                    separationNeighbors.Add(neighborAgent);
+                    separationNeighbors.Add(neighbor);
                 }
             }
         }
 
-        if (hunterCollider != null)
+        if (detectedHunter != null)
         {
-            Vector3 hunterVelocity = Vector3.zero;
-            SteeringAgent hunterAgent = hunterCollider.GetComponent<SteeringAgent>() ?? hunterCollider.GetComponentInParent<SteeringAgent>();
-
-            if (hunterAgent != null)
-            {
-                hunterVelocity = hunterAgent.Velocity;
-            }
-            else if (hunterCollider.attachedRigidbody != null)
-            {
-                hunterVelocity = hunterCollider.attachedRigidbody.linearVelocity;
-            }
-
-            Vector3 hunterTargetPos = hunterCollider.transform.position;
+            Vector3 hunterVelocity = detectedHunter.Agent != null ? detectedHunter.Agent.Velocity : Vector3.zero;
+            Vector3 hunterTargetPos = detectedHunter.transform.position;
             hunterTargetPos.y = transform.position.y;
             hunterVelocity.y = 0f;
 
@@ -235,20 +225,25 @@ public class Boid : SteeringAgent
 
     public PointOfInterest PrioritizePOIByProximity()
     {
+        if (sensor == null) return null;
+
         PointOfInterest nearestPOI = null;
-        float shortestDistance = float.MaxValue;
+        float shortestDistSqr = float.MaxValue;
         Vector3 currentPosition = transform.position;
 
-        for (int i = 0; i < PointOfInterest.ActivePOIs.Count; i++)
+        var detectedPOIs = sensor.POIs;
+        for (int i = 0; i < detectedPOIs.Count; i++)
         {
-            PointOfInterest poi = PointOfInterest.ActivePOIs[i];
+            PointOfInterest poi = detectedPOIs[i];
             if (poi == null || poi.currentHealth <= 0f) continue;
 
-            float distance = Vector3.Distance(currentPosition, poi.transform.position);
+            Vector3 toPoi = poi.transform.position - currentPosition;
+            toPoi.y = 0f;
+            float distSqr = toPoi.sqrMagnitude;
 
-            if (distance <= poiPerceptionRadius && distance < shortestDistance)
+            if (distSqr < shortestDistSqr)
             {
-                shortestDistance = distance;
+                shortestDistSqr = distSqr;
                 nearestPOI = poi;
             }
         }
@@ -303,6 +298,7 @@ public class Boid : SteeringAgent
         isRespawning = true;
         respawnTimer = 0f;
         SetVisibilityAndPhysics(false);
+        sensor?.Clear();
     }
 
     private void CompleteRespawn()
