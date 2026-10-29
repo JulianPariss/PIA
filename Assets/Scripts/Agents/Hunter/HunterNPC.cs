@@ -33,8 +33,11 @@ public class HunterNPC : MonoBehaviour
     [Header("Detección y Sensor")]
     [SerializeField] private float visionRadius = 14f;
     [SerializeField] private AgentSensor sensor;
+    [SerializeField] private LayerMask obstacleMask = 0;
+    [SerializeField] private float eyeHeight = 0.8f;
     public AgentSensor Sensor => sensor;
     public float VisionRadius => visionRadius;
+    public LayerMask ObstacleMask => obstacleMask;
 
     [Header("Configuración de Estados")]
     [SerializeField] private PatrolData patrolData = new PatrolData();
@@ -68,6 +71,19 @@ public class HunterNPC : MonoBehaviour
     {
         Agent = GetComponent<SteeringAgent>();
 
+        if (obstacleMask == 0)
+        {
+            if (Agent != null && Agent.ObstacleMask != 0)
+            {
+                obstacleMask = Agent.ObstacleMask;
+            }
+            else
+            {
+                int obstacleLayer = LayerMask.NameToLayer("Obstacle");
+                if (obstacleLayer >= 0) obstacleMask = 1 << obstacleLayer;
+            }
+        }
+
         if (sensor == null)
         {
             sensor = GetComponentInChildren<AgentSensor>();
@@ -88,7 +104,7 @@ public class HunterNPC : MonoBehaviour
 
         if (!TryGetComponent<HunterVisuals>(out _)) gameObject.AddComponent<HunterVisuals>();
         if (!TryGetComponent<HunterStateLabel>(out _)) gameObject.AddComponent<HunterStateLabel>();
-        if (!TryGetComponent<SimulationHUD>(out _)) gameObject.AddComponent<SimulationHUD>();
+        if (FindFirstObjectByType<SimulationHUD>() == null && !TryGetComponent<SimulationHUD>(out _)) gameObject.AddComponent<SimulationHUD>();
 
         if (!CompareTag("Hunter"))
         {
@@ -180,6 +196,8 @@ public class HunterNPC : MonoBehaviour
         if (sensor != null)
         {
             var boids = sensor.Boids;
+            Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
+
             for (int i = 0; i < boids.Count; i++)
             {
                 Boid b = boids[i];
@@ -191,8 +209,12 @@ public class HunterNPC : MonoBehaviour
 
                 if (sqr < minSqr)
                 {
-                    minSqr = sqr;
-                    closest = b;
+                    Vector3 targetCenter = b.transform.position + Vector3.up * 0.5f;
+                    if (LineOfSight.HasLineOfSight(eyePos, targetCenter, obstacleMask))
+                    {
+                        minSqr = sqr;
+                        closest = b;
+                    }
                 }
             }
         }
@@ -208,6 +230,8 @@ public class HunterNPC : MonoBehaviour
         if (sensor != null)
         {
             var boids = sensor.Boids;
+            Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
+
             for (int i = 0; i < boids.Count; i++)
             {
                 Boid b = boids[i];
@@ -219,8 +243,12 @@ public class HunterNPC : MonoBehaviour
 
                 if (sqr < minSqr)
                 {
-                    minSqr = sqr;
-                    closest = b;
+                    Vector3 targetCenter = b.transform.position + Vector3.up * 0.5f;
+                    if (LineOfSight.HasLineOfSight(eyePos, targetCenter, obstacleMask))
+                    {
+                        minSqr = sqr;
+                        closest = b;
+                    }
                 }
             }
         }
@@ -230,20 +258,30 @@ public class HunterNPC : MonoBehaviour
 
     public bool IsInVision(Boid boid)
     {
-        if (boid == null || !boid.gameObject.activeInHierarchy) return false;
+        if (boid == null || !boid.gameObject.activeInHierarchy || boid.isRespawning) return false;
+
+        Vector3 diff = boid.transform.position - transform.position;
+        diff.y = 0f;
+        if (diff.sqrMagnitude > (visionRadius * visionRadius)) return false;
 
         if (sensor != null)
         {
             var list = sensor.Boids;
+            bool found = false;
             for (int i = 0; i < list.Count; i++)
             {
-                if (list[i] == boid) return true;
+                if (list[i] == boid)
+                {
+                    found = true;
+                    break;
+                }
             }
+            if (!found) return false;
         }
 
-        Vector3 diff = boid.transform.position - transform.position;
-        diff.y = 0f;
-        return diff.sqrMagnitude <= (visionRadius * visionRadius);
+        Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
+        Vector3 targetCenter = boid.transform.position + Vector3.up * 0.5f;
+        return LineOfSight.HasLineOfSight(eyePos, targetCenter, obstacleMask);
     }
 
     public Transform GetCurrentWaypoint()
