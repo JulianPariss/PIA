@@ -34,18 +34,24 @@ public static class LineOfSight
             return true;
         }
 
-        if (radius <= 0.001f)
+        // 1. Rayo lineal directo: SIEMPRE se evalúa primero para asegurar que no atraviesa obstáculos sólidos
+        if (Physics.Linecast(from, to, out hit, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            // Chequeo lineal directo (rayo infinitesimal)
-            bool blocked = Physics.Linecast(from, to, out hit, obstacleMask, QueryTriggerInteraction.Ignore);
-            return !blocked;
+            return false;
         }
-        else
+
+        // 2. Si se solicitó radio de despeje, verificar volumen cilíndrico con SphereCast
+        if (radius > 0.001f)
         {
-            // Chequeo volumétrico cilíndrico/esférico con SphereCast
             Vector3 dir = diff / dist;
-            bool blocked = Physics.SphereCast(from, radius, dir, out hit, dist, obstacleMask, QueryTriggerInteraction.Ignore);
-            return !blocked;
+            float checkDist = Mathf.Max(0.01f, dist - radius * 0.5f);
+            if (Physics.SphereCast(from, radius, dir, out hit, checkDist, obstacleMask, QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
         }
+
+        hit = default;
+        return true;
     }
 }

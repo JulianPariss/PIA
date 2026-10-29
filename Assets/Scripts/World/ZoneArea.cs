@@ -78,10 +78,33 @@ namespace PIA1.World
 
         #region Static Queries
 
-        public static IReadOnlyList<ZoneArea> AllZones => ActiveZones;
+        public static IReadOnlyList<ZoneArea> AllZones
+        {
+            get
+            {
+                EnsureZonesPopulated();
+                return ActiveZones;
+            }
+        }
+
+        private static void EnsureZonesPopulated()
+        {
+            if (ActiveZones.Count == 0)
+            {
+                ZoneArea[] found = Object.FindObjectsByType<ZoneArea>(FindObjectsSortMode.None);
+                for (int i = 0; i < found.Length; i++)
+                {
+                    if (found[i] != null && !ActiveZones.Contains(found[i]))
+                    {
+                        ActiveZones.Add(found[i]);
+                    }
+                }
+            }
+        }
 
         public static ZoneArea GetZoneAt(Vector3 worldPosition)
         {
+            EnsureZonesPopulated();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
                 if (ActiveZones[i] != null && ActiveZones[i].Contains(worldPosition))
@@ -94,6 +117,7 @@ namespace PIA1.World
 
         public static bool IsPositionInSafeZone(Vector3 worldPosition)
         {
+            EnsureZonesPopulated();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
                 ZoneArea zone = ActiveZones[i];
@@ -107,6 +131,7 @@ namespace PIA1.World
 
         public static ZoneArea GetZone(ZoneType type)
         {
+            EnsureZonesPopulated();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
                 if (ActiveZones[i] != null && ActiveZones[i].Type == type)
@@ -119,6 +144,7 @@ namespace PIA1.World
 
         public static List<ZoneArea> GetSafeZones()
         {
+            EnsureZonesPopulated();
             var result = new List<ZoneArea>();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
@@ -132,6 +158,7 @@ namespace PIA1.World
 
         public static ZoneArea GetNearestSafeZone(Vector3 fromPosition)
         {
+            EnsureZonesPopulated();
             ZoneArea nearest = null;
             float minSqrDist = float.MaxValue;
 
