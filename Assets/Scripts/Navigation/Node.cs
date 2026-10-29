@@ -18,7 +18,7 @@ namespace PIA1.Navigation
         [SerializeField] private float cost = 1.0f;
         [SerializeField] private bool isWalkable = true;
         [SerializeField] private bool isSafeZone = false;
-        [SerializeField] private ZoneType zone = ZoneType.Coto;
+        [SerializeField] private ZoneType zone = ZoneType.Corridor;
 
         [Header("Gizmos")]
         [SerializeField] private float gizmoRadius = 0.35f;
@@ -36,26 +36,35 @@ namespace PIA1.Navigation
             if (!neighbors.Contains(neighbor))
             {
                 neighbors.Add(neighbor);
+                MarkDirty();
             }
             if (bidirectional && !neighbor.neighbors.Contains(this))
             {
                 neighbor.neighbors.Add(this);
+                neighbor.MarkDirty();
             }
         }
 
         public void RemoveNeighbor(Node neighbor, bool bidirectional = true)
         {
             if (neighbor == null) return;
-            neighbors.Remove(neighbor);
-            if (bidirectional)
+            if (neighbors.Remove(neighbor))
             {
-                neighbor.neighbors.Remove(this);
+                MarkDirty();
+            }
+            if (bidirectional && neighbor.neighbors.Remove(this))
+            {
+                neighbor.MarkDirty();
             }
         }
 
         public void ClearNeighbors()
         {
-            neighbors.Clear();
+            if (neighbors.Count > 0)
+            {
+                neighbors.Clear();
+                MarkDirty();
+            }
         }
 
         public bool HasNeighbor(Node neighbor)
@@ -65,6 +74,7 @@ namespace PIA1.Navigation
 
         /// <summary>
         /// Detecta automáticamente a qué ZoneArea pertenece según su posición en el mundo.
+        /// Si no se encuentra dentro de ninguna ZoneArea delimitada, se marca como nodo de pasillo (Corridor).
         /// </summary>
         public void AutoDetectZone()
         {
@@ -74,6 +84,23 @@ namespace PIA1.Navigation
                 zone = detected.Type;
                 isSafeZone = (detected.Type == ZoneType.SafeZone);
             }
+            else
+            {
+                zone = ZoneType.Corridor;
+                isSafeZone = false;
+            }
+            MarkDirty();
+        }
+
+        public void MarkDirty()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                UnityEditor.EditorUtility.SetDirty(this);
+                UnityEditor.PrefabUtility.RecordPrefabInstancePropertyModifications(this);
+            }
+#endif
         }
 
         private void OnDrawGizmos()
@@ -121,15 +148,16 @@ namespace PIA1.Navigation
             switch (zone)
             {
                 case ZoneType.InitialZone:
-                    return new Color(0.2f, 0.6f, 1f); // Azul cielo
+                    return new Color(0.2f, 0.6f, 1f); // Azul cielo (Zona Inicial)
                 case ZoneType.Coto:
-                    return new Color(0.75f, 0.3f, 0.95f); // Violeta tradicional del grafo
+                    return new Color(0.2f, 0.9f, 0.35f); // Verde esmeralda (Coto de Caza)
                 case ZoneType.SafeZone:
-                    return new Color(1f, 0.85f, 0.1f); // Amarillo
+                    return new Color(1f, 0.85f, 0.1f); // Amarillo (Zona Segura)
                 case ZoneType.ExitZone:
-                    return new Color(0.85f, 0.1f, 0.6f); // Magenta
+                    return new Color(0.9f, 0.2f, 0.85f); // Magenta (Salida)
+                case ZoneType.Corridor:
                 default:
-                    return new Color(0.75f, 0.3f, 0.95f);
+                    return new Color(0.75f, 0.3f, 0.95f); // Violeta tradicional del grafo (Pasillos)
             }
         }
     }

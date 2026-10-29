@@ -6,7 +6,8 @@ namespace PIA1.Navigation
 {
     /// <summary>
     /// Componente central que gestiona la red de nodos del escenario para el algoritmo A*.
-    /// Cumple con la consigna R-07 (grafo propio con nodos y listas de adyacencia, sin matriz ni NavMesh).
+    /// Cumple con la consigna R-07 (grafo propio con nodos y listas de adyacencia, sin matriz ni NavMesh)
+    /// y utiliza un buffer reutilizable para 0 asignaciones de memoria (GC Free) en runtime.
     /// </summary>
     public class Graph : MonoBehaviour
     {
@@ -17,7 +18,7 @@ namespace PIA1.Navigation
 
         [Header("Auto Connect Configuration")]
         [Tooltip("Distancia máxima para evaluar conexiones entre nodos.")]
-        [SerializeField] private float maxConnectionDistance = 8.0f;
+        [SerializeField] private float maxConnectionDistance = 10.0f;
 
         [Tooltip("Radio del haz para comprobar despeje lateral contra muros (SphereCast).")]
         [SerializeField] private float clearanceRadius = 0.25f;
@@ -25,11 +26,13 @@ namespace PIA1.Navigation
         [Tooltip("Capa de muros y obstáculos físicos.")]
         [SerializeField] private LayerMask obstacleMask;
 
-        [Tooltip("Si está activo, poda conexiones directas largas cuando ya existe un nodo intermedio en línea recta.")]
+        [Tooltip("Si está activo, poda conexiones directas largas cuando ya existe un nodo intermedio conectado en línea recta.")]
         [SerializeField] private bool pruneRedundantConnections = true;
 
         [Tooltip("Cantidad máxima de vecinos recomendada por nodo para evitar marañas densas en salas abiertas (0 = sin límite).")]
         [SerializeField] private int maxNeighborsPerNode = 5;
+
+        private readonly List<Node> _queryBuffer = new List<Node>(128);
 
         public IReadOnlyList<Node> Nodes => nodes;
 
@@ -45,14 +48,32 @@ namespace PIA1.Navigation
                 return;
             }
 
+            if (obstacleMask == 0)
+            {
+                obstacleMask = LayerMask.GetMask("Obstacle");
+            }
+
             if (nodes == null || nodes.Count == 0)
             {
                 FindNodesInScene();
             }
 
-            if (obstacleMask == 0)
+            // Salvaguarda en runtime: si los nodos aún no fueron conectados o clasificados en el Editor,
+            // se inicializan una única vez en Awake al arrancar la simulación.
+            bool anyConnected = false;
+            for (int i = 0; i < nodes.Count; i++)
             {
-                obstacleMask = LayerMask.GetMask("Obstacle");
+                if (nodes[i] != null && nodes[i].Neighbors.Count > 0)
+                {
+                    anyConnected = true;
+                    break;
+                }
+            }
+
+            if (!anyConnected && nodes.Count > 1)
+            {
+                AutoDetectZonesFromZoneAreas();
+                AutoConnectVisibleNeighbors();
             }
         }
 
@@ -65,7 +86,7 @@ namespace PIA1.Navigation
         }
 
         /// <summary>
-        /// Obtiene el nodo más cercano a una posición determinada.
+        /// Obtiene el nodo más cercano a una posición determinada (0 GC).
         /// </summary>
         public Node GetClosestNode(Vector3 position, bool excludeSafeZones = false)
         {
@@ -91,7 +112,7 @@ namespace PIA1.Navigation
 
         /// <summary>
         /// Obtiene el nodo más cercano que tenga línea de visión directa despejada (sin chocar con Obstacle).
-        /// Si no hay ninguno con visión directa, retorna el nodo más cercano euclidiano.
+        /// Si no hay ninguno con visión directa, retorna el nodo más cercano euclidiano (0 GC).
         /// </summary>
         public Node GetClosestVisibleNode(Vector3 position, float eyeHeight = 0.8f, bool excludeSafeZones = false)
         {
@@ -124,47 +145,46 @@ namespace PIA1.Navigation
                 }
             }
 
-            // Fallback si ningún nodo tiene visión directa
             return closest != null ? closest : GetClosestNode(position, excludeSafeZones);
         }
 
         /// <summary>
-        /// Retorna un nodo transitable aleatorio dentro del Coto de Caza (para el estado Search del Cazador).
+        /// Retorna un nodo transitable aleatorio dentro del Coto de Caza (0 GC).
         /// </summary>
         public Node GetRandomCotoNode()
         {
-            var candidates = new List<Node>();
+            _queryBuffer.Clear();
             for (int i = 0; i < nodes.Count; i++)
             {
                 Node node = nodes[i];
                 if (node != null && node.IsWalkable && !node.IsSafeZone && node.Zone == ZoneType.Coto)
                 {
-                    candidates.Add(node);
+                    _queryBuffer.Add(node);
                 }
             }
 
-            if (candidates.Count == 0)
+            if (_queryBuffer.Count == 0)
             {
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     Node node = nodes[i];
                     if (node != null && node.IsWalkable && !node.IsSafeZone)
                     {
-                        candidates.Add(node);
+                        _queryBuffer.Add(node);
                     }
                 }
             }
 
-            if (candidates.Count == 0) return null;
-            return candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            if (_queryBuffer.Count == 0) return null;
+            return _queryBuffer[UnityEngine.Random.Range(0, _queryBuffer.Count)];
         }
 
         /// <summary>
-        /// Retorna un nodo transitable aleatorio dentro de una zona específica.
+        /// Retorna un nodo transitable aleatorio dentro de una zona específica (0 GC).
         /// </summary>
         public Node GetRandomNodeInZone(ZoneType zone, bool excludeSafeZones = false)
         {
-            var candidates = new List<Node>();
+            _queryBuffer.Clear();
             for (int i = 0; i < nodes.Count; i++)
             {
                 Node node = nodes[i];
@@ -172,20 +192,21 @@ namespace PIA1.Navigation
                 if (excludeSafeZones && node.IsSafeZone) continue;
                 if (node.Zone == zone)
                 {
-                    candidates.Add(node);
+                    _queryBuffer.Add(node);
                 }
             }
 
-            if (candidates.Count == 0) return null;
-            return candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            if (_queryBuffer.Count == 0) return null;
+            return _queryBuffer[UnityEngine.Random.Range(0, _queryBuffer.Count)];
         }
 
         /// <summary>
-        /// Obtiene todos los nodos asociados a una zona determinada.
+        /// Llena la lista suministrada con todos los nodos asociados a una zona determinada (0 GC).
         /// </summary>
-        public List<Node> GetNodesInZone(ZoneType zone, bool excludeSafeZones = false)
+        public void GetNodesInZoneNonAlloc(ZoneType zone, List<Node> results, bool excludeSafeZones = false)
         {
-            var result = new List<Node>();
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < nodes.Count; i++)
             {
                 Node node = nodes[i];
@@ -193,10 +214,9 @@ namespace PIA1.Navigation
                 if (excludeSafeZones && node.IsSafeZone) continue;
                 if (node.Zone == zone)
                 {
-                    result.Add(node);
+                    results.Add(node);
                 }
             }
-            return result;
         }
 
         #region Editor Utilities
@@ -219,6 +239,7 @@ namespace PIA1.Navigation
                 }
             }
 
+            MarkGraphDirty();
             Debug.Log($"[Graph] Se registraron {nodes.Count} nodos en el grafo.");
         }
 
@@ -235,13 +256,22 @@ namespace PIA1.Navigation
                 obstacleMask = LayerMask.GetMask("Obstacle");
             }
 
-            // Limpiamos conexiones previas para generar un grafo limpio y consistente
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                Physics.SyncTransforms();
+            }
+#endif
+
+            // 1. Actualizamos las zonas de cada nodo según las ZoneAreas de la escena
+            AutoDetectZonesFromZoneAreas();
+
+            // 2. Limpiamos conexiones previas para generar un grafo limpio y consistente
             ClearAllConnections();
 
             int connectionsCreated = 0;
             float maxSqrDist = maxConnectionDistance * maxConnectionDistance;
 
-            // Recopilamos pares candidatos válidos
             var candidates = new List<(Node a, Node b, float dist)>();
 
             for (int i = 0; i < nodes.Count; i++)
@@ -260,7 +290,6 @@ namespace PIA1.Navigation
 
                     float dist = Mathf.Sqrt(sqrDist);
 
-                    // Altura del rayo: en el centro vertical de los agentes / muros
                     Vector3 origin = a.Position + Vector3.up * 0.5f;
                     Vector3 target = b.Position + Vector3.up * 0.5f;
 
@@ -271,15 +300,13 @@ namespace PIA1.Navigation
                 }
             }
 
-            // Ordenamos candidatos de menor a mayor distancia
-            // Prioriza tramos cortos y directos frente a saltos lejanos
+            // Ordenamos candidatos de menor a mayor distancia para conectar primero los tramos cortos inmediatos
             candidates.Sort((x, y) => x.dist.CompareTo(y.dist));
 
             for (int k = 0; k < candidates.Count; k++)
             {
                 var (a, b, distAB) = candidates[k];
 
-                // Comprobar límite de vecinos por nodo si está configurado
                 if (maxNeighborsPerNode > 0)
                 {
                     if (a.Neighbors.Count >= maxNeighborsPerNode || b.Neighbors.Count >= maxNeighborsPerNode)
@@ -288,8 +315,8 @@ namespace PIA1.Navigation
                     }
                 }
 
-                // Poda de conexiones redundantes: si existe un nodo 'c' que está casi en la recta entre 'a' y 'b',
-                // evitamos el salto largo redundante (a-b) ya que el camino natural transita por 'c'.
+                // Poda segura de conexiones redundantes: solo omitimos el salto largo (a-b)
+                // si ya existe un nodo intermedio 'c' conectado tanto con 'a' como con 'b' casi en línea recta.
                 if (pruneRedundantConnections)
                 {
                     bool hasIntermediate = false;
@@ -298,14 +325,16 @@ namespace PIA1.Navigation
                         Node c = nodes[m];
                         if (c == null || c == a || c == b || !c.IsWalkable) continue;
 
-                        float distAC = Vector3.Distance(a.Position, c.Position);
-                        float distCB = Vector3.Distance(c.Position, b.Position);
-
-                        // Si c se encuentra entre a y b en línea casi recta (tolerancia 8%)
-                        if (distAC < distAB && distCB < distAB && (distAC + distCB) <= distAB * 1.08f)
+                        if (a.HasNeighbor(c) && b.HasNeighbor(c))
                         {
-                            hasIntermediate = true;
-                            break;
+                            float distAC = Vector3.Distance(a.Position, c.Position);
+                            float distCB = Vector3.Distance(c.Position, b.Position);
+
+                            if ((distAC + distCB) <= distAB * 1.10f)
+                            {
+                                hasIntermediate = true;
+                                break;
+                            }
                         }
                     }
 
@@ -319,6 +348,7 @@ namespace PIA1.Navigation
                 connectionsCreated++;
             }
 
+            MarkGraphDirty();
             Debug.Log($"[Graph] AutoConnect finalizado. Conexiones bidireccionales creadas: {connectionsCreated}");
         }
 
@@ -340,6 +370,7 @@ namespace PIA1.Navigation
                 }
             }
 
+            MarkGraphDirty();
             Debug.Log($"[Graph] Zonas autodetectadas para {updated} nodos.");
         }
 
@@ -354,7 +385,22 @@ namespace PIA1.Navigation
                 }
             }
 
+            MarkGraphDirty();
             Debug.Log("[Graph] Todas las conexiones entre nodos han sido eliminadas.");
+        }
+
+        private void MarkGraphDirty()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                UnityEditor.EditorUtility.SetDirty(this);
+                if (gameObject.scene.IsValid())
+                {
+                    UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                }
+            }
+#endif
         }
 
         #endregion

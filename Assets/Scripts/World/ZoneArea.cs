@@ -5,10 +5,11 @@ namespace PIA1.World
 {
     public enum ZoneType
     {
-        InitialZone,
-        Coto,
-        SafeZone,
-        ExitZone
+        InitialZone = 0,
+        Coto = 1,
+        SafeZone = 2,
+        ExitZone = 3,
+        Corridor = 4
     }
 
     /// <summary>
@@ -61,6 +62,7 @@ namespace PIA1.World
 
         /// <summary>
         /// Comprueba si un punto en espacio de mundo está contenido dentro de los límites de la zona.
+        /// Evalúa en el plano horizontal del volumen para tolerar diferencias de altura Y entre piso/nodos/agentes.
         /// </summary>
         public bool Contains(Vector3 worldPosition)
         {
@@ -71,9 +73,12 @@ namespace PIA1.World
 
             if (_boxCollider == null) return false;
 
-            // Evaluamos la distancia al punto más cercano; si coincide, está dentro del volumen
-            Vector3 closest = _boxCollider.ClosestPoint(worldPosition);
-            return (closest - worldPosition).sqrMagnitude < 0.0001f;
+            // Convertimos el punto al espacio local del transform y comprobamos contra center y size/2 en XZ
+            Vector3 localPos = transform.InverseTransformPoint(worldPosition) - _boxCollider.center;
+            Vector3 halfSize = _boxCollider.size * 0.5f;
+
+            return Mathf.Abs(localPos.x) <= halfSize.x + 0.01f &&
+                   Mathf.Abs(localPos.z) <= halfSize.z + 0.01f;
         }
 
         #region Static Queries
@@ -89,8 +94,9 @@ namespace PIA1.World
 
         private static void EnsureZonesPopulated()
         {
-            if (ActiveZones.Count == 0)
+            if (!Application.isPlaying || ActiveZones.Count == 0)
             {
+                ActiveZones.Clear();
                 ZoneArea[] found = Object.FindObjectsByType<ZoneArea>(FindObjectsSortMode.None);
                 for (int i = 0; i < found.Length; i++)
                 {
@@ -167,7 +173,7 @@ namespace PIA1.World
                 ZoneArea zone = ActiveZones[i];
                 if (zone != null && zone.Type == ZoneType.SafeZone)
                 {
-                    float sqrDist = (zone.transform.position - fromPosition).sqrMagnitude;
+                    float sqrDist = (zone.Bounds.center - fromPosition).sqrMagnitude;
                     if (sqrDist < minSqrDist)
                     {
                         minSqrDist = sqrDist;

@@ -48,5 +48,5 @@ MonoBehaviour:
   cost: 1
   isWalkable: 1
   isSafeZone: 0
-  zone: 1
+  zone: 4
   gizmoRadius: 0.35
