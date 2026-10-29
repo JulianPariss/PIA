@@ -17,7 +17,7 @@ public class SimulationHUD : MonoBehaviour
     {
         if (hunter == null)
         {
-            hunter = GetComponent<HunterNPC>() ?? GetComponentInParent<HunterNPC>();
+            hunter = GetComponent<HunterNPC>() ?? GetComponentInParent<HunterNPC>() ?? FindFirstObjectByType<HunterNPC>();
         }
 
         if (panelBg == null)
