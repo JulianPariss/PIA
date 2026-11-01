@@ -27,25 +27,42 @@ public class GatherState : State<HunterStateId>
 
         if (target == null || !target.isDead || target.isRespawning)
         {
-            fsm.ChangeState(HunterStateId.Patrol);
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Search);
         }
     }
 
     public override void Tick()
     {
-        Boid target = hunter.CurrentTarget;
-        if (target == null || !target.isDead || target.isRespawning)
+        if (hunter.TryConsumePendingCapture())
         {
-            fsm.ChangeState(HunterStateId.Patrol);
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Dead);
             return;
         }
+
+        if (hunter.ShouldFleeFromWolf())
+        {
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Flee);
+            return;
+        }
+
+        Boid target = hunter.CurrentTarget;
+        if (target == null || !target.isDead || target.isRespawning || !target.gameObject.activeInHierarchy)
+        {
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Search);
+            return;
+        }
+
+        hunter.SetVisualMode(HunterVisualMode.Gather);
 
         Vector3 hunterFlat = hunter.transform.position;
         Vector3 targetFlat = target.transform.position;
         hunterFlat.y = 0f;
         targetFlat.y = 0f;
         float distance = Vector3.Distance(hunterFlat, targetFlat);
-        float slowingRadius = Mathf.Max(5.5f, data.arrivalDistance * 2.5f);
         float cancelDistance = data.arrivalDistance * 1.8f;
 
         if (distance > data.arrivalDistance)
@@ -55,15 +72,15 @@ public class GatherState : State<HunterStateId>
                 gatherTimer = 0f;
             }
 
-            Vector3 targetMovePos = target.transform.position;
-            targetMovePos.y = hunter.transform.position.y;
-            Vector3 arriveForce = SteeringBehaviors.Arrive(hunter.Agent, targetMovePos, slowingRadius);
-            arriveForce.y = 0f;
-            hunter.Agent.ApplyForce(arriveForce);
+            if (hunter.NavAgent != null)
+            {
+                hunter.NavAgent.NavigateToPosition(target.transform.position, useArriveAtEnd: true);
+            }
 
             if (gatherTimer <= 0f) return;
         }
 
+        hunter.NavAgent?.StopNavigation();
         hunter.Agent.Stop();
         if (hunter.Agent.Velocity.sqrMagnitude < 1.0f)
         {
@@ -74,7 +91,10 @@ public class GatherState : State<HunterStateId>
         if (toTarget.sqrMagnitude > 0.001f)
         {
             Quaternion lookRotation = Quaternion.LookRotation(toTarget.normalized);
-            hunter.transform.rotation = Quaternion.Slerp(hunter.transform.rotation, lookRotation, hunter.Agent.RotationSpeed * Time.deltaTime);
+            hunter.transform.rotation = Quaternion.Slerp(
+                hunter.transform.rotation,
+                lookRotation,
+                hunter.Agent.RotationSpeed * Time.deltaTime);
         }
 
         gatherTimer += Time.deltaTime;
@@ -82,6 +102,7 @@ public class GatherState : State<HunterStateId>
         if (gatherTimer >= data.duration)
         {
             target.Collect();
+            hunter.IncrementGathers();
             hunter.NotifyAction("GatherCompleted", target);
 
             if (hunter.LastDamagedTarget == target)
@@ -90,12 +111,21 @@ public class GatherState : State<HunterStateId>
             }
 
             hunter.CurrentTarget = null;
-            fsm.ChangeState(HunterStateId.Patrol);
+
+            if (hunter.HasCompletedRequiredGathers)
+            {
+                fsm.ChangeState(HunterStateId.Exit);
+            }
+            else
+            {
+                fsm.ChangeState(HunterStateId.Search);
+            }
         }
     }
 
     public override void Exit()
     {
         gatherTimer = 0f;
+        hunter.NavAgent?.StopNavigation();
     }
 }

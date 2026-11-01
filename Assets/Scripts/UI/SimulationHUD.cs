@@ -1,162 +1,104 @@
-using System.Collections.Generic;
 using UnityEngine;
+using PIA1.Agents.Wolves;
+using PIA1.World;
 
 public class SimulationHUD : MonoBehaviour
 {
-    [Header("Configuración")]
     [SerializeField] private HunterNPC hunter;
-    [SerializeField] private int maxLogEntries = 6;
 
-    private readonly List<string> eventLog = new List<string>();
-    private GUIStyle panelStyle;
-    private GUIStyle headerStyle;
-    private GUIStyle textStyle;
-    private static Texture2D panelBg;
+    public static SimulationHUD Instance { get; private set; }
 
     private void Awake()
     {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else if (Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         if (hunter == null)
         {
-            hunter = GetComponent<HunterNPC>() ?? GetComponentInParent<HunterNPC>() ?? FindFirstObjectByType<HunterNPC>();
-        }
-
-        if (panelBg == null)
-        {
-            panelBg = new Texture2D(1, 1);
-            panelBg.SetPixel(0, 0, new Color(0.06f, 0.08f, 0.11f, 0.82f));
-            panelBg.Apply();
-        }
-    }
-
-    private void Start()
-    {
-        if (hunter != null)
-        {
-            if (hunter.FSM != null)
-            {
-                hunter.FSM.OnStateChanged += HandleStateChanged;
-            }
-            hunter.OnActionExecuted += HandleActionExecuted;
-            AddLog($"Inicio FSM → {hunter.FSM?.CurrentKey}");
+            hunter = GetComponent<HunterNPC>() ?? GetComponentInParent<HunterNPC>() ?? HunterNPC.Instance;
         }
     }
 
     private void OnDestroy()
     {
-        if (hunter != null)
+        if (Instance == this)
         {
-            if (hunter.FSM != null)
-            {
-                hunter.FSM.OnStateChanged -= HandleStateChanged;
-            }
-            hunter.OnActionExecuted -= HandleActionExecuted;
-        }
-    }
-
-    private void HandleStateChanged(HunterStateId previous, HunterStateId current)
-    {
-        string targetInfo = hunter.CurrentTarget != null ? $" ({hunter.CurrentTarget.name})" : string.Empty;
-        AddLog($"FSM: {previous} → {current}{targetInfo}");
-    }
-
-    private void HandleActionExecuted(string actionName, Boid target)
-    {
-        string targetName = target != null ? target.name : "-";
-        AddLog($"Acción: {actionName} → {targetName}");
-    }
-
-    private void AddLog(string message)
-    {
-        string entry = $"[{Time.time:0.0}s] {message}";
-        eventLog.Insert(0, entry);
-        if (eventLog.Count > maxLogEntries)
-        {
-            eventLog.RemoveAt(eventLog.Count - 1);
-        }
-    }
-
-    private void EnsureStyles()
-    {
-        if (panelStyle == null)
-        {
-            panelStyle = new GUIStyle(GUI.skin.box)
-            {
-                padding = new RectOffset(10, 10, 8, 8)
-            };
-            panelStyle.normal.background = panelBg;
-        }
-
-        if (headerStyle == null)
-        {
-            headerStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontStyle = FontStyle.Bold,
-                fontSize = 13
-            };
-            headerStyle.normal.textColor = new Color(0.35f, 0.85f, 1f);
-        }
-
-        if (textStyle == null)
-        {
-            textStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                richText = true
-            };
-            textStyle.normal.textColor = new Color(0.92f, 0.92f, 0.92f);
+            Instance = null;
         }
     }
 
     private void OnGUI()
     {
-        if (Event.current.type != EventType.Repaint && Event.current.type != EventType.Layout) return;
-        if (hunter == null) return;
+        if (hunter == null)
+        {
+            hunter = HunterNPC.Instance;
+            if (hunter == null)
+            {
+                return;
+            }
+        }
 
-        EnsureStyles();
+        GUILayout.BeginArea(new Rect(10f, 10f, 320f, 200f), GUI.skin.box);
+        GUILayout.Label("Simulación - Telemetría", GUI.skin.box);
 
-        int livingDetected = 0;
-        int deadDetected = 0;
+        string hunterState = hunter.FSM != null ? hunter.FSM.CurrentKey.ToString() : "None";
+        GUILayout.Label($"Cazador: [{hunterState}] | Recolección: {hunter.CurrentGathers}/{hunter.RequiredGathers}");
+
+        string navMode = hunter.NavAgent != null ? hunter.NavAgent.CurrentMode.ToString() : "Idle";
+        ZoneArea currentZone = ZoneArea.GetZoneAt(hunter.transform.position);
+        string zoneName = currentZone != null ? currentZone.ZoneName : "Pasillo";
+        GUILayout.Label($"Navegación: {navMode} | Zona: {zoneName}");
+
+        string wolfThreat = hunter.DetectedWolf != null
+            ? $"¡{hunter.DetectedWolf.WolfId} a la vista!"
+            : (WolfPack.Instance != null && WolfPack.Instance.HasActiveLKP ? "Alerta LKP" : "Despejado");
+        GUILayout.Label($"Amenaza Lobos: {wolfThreat}");
+
+        string safeZone = hunter.ChosenSafeZone != null
+            ? hunter.ChosenSafeZone.ZoneName
+            : (hunter.IsInSafeZone ? "En Refugio" : "-");
+        GUILayout.Label($"Zona Segura: {safeZone}");
+
+        string tba = hunter.IsTBAReady ? "Listo" : $"{hunter.AttackCooldownRemaining:0.0}s";
+        string targetName = hunter.CurrentTarget != null ? hunter.CurrentTarget.name : "-";
+        GUILayout.Label($"TBA: {tba} | Target: {targetName}");
+
+        int aliveBoids = 0;
+        int deadBoids = 0;
         if (hunter.Sensor != null)
         {
             var boids = hunter.Sensor.Boids;
             for (int i = 0; i < boids.Count; i++)
             {
                 Boid b = boids[i];
-                if (b == null || b.isRespawning) continue;
-                if (b.IsAlive) livingDetected++;
-                else deadDetected++;
+                if (b == null || b.isRespawning)
+                {
+                    continue;
+                }
+                if (b.IsAlive)
+                {
+                    aliveBoids++;
+                }
+                else
+                {
+                    deadBoids++;
+                }
             }
         }
 
-        string fsmState = hunter.FSM != null ? hunter.FSM.CurrentKey.ToString() : "None";
-        string visualMode = hunter.CurrentVisualMode.ToString();
-        string tbaText = hunter.IsTBAReady ? "<color=#4CF56B>LISTO</color>" : $"{hunter.AttackCooldownRemaining:0.0}s";
-        string targetText = (hunter.CurrentTarget != null && !hunter.CurrentTarget.isRespawning)
-            ? $"{hunter.CurrentTarget.name} ({Mathf.CeilToInt(hunter.CurrentTarget.Health.Current)} HP)"
-            : "Ninguno";
         int activePois = hunter.POISpawner != null ? hunter.POISpawner.ActiveCount : 0;
+        GUILayout.Label($"Boids Vivos: {aliveBoids} | Caídos: {deadBoids} | POIs: {activePois}");
 
-        Rect panelRect = new Rect(12f, 12f, 330f, 235f);
-        GUI.Box(panelRect, GUIContent.none, panelStyle);
+        int totalWolves = WolfPack.Instance != null ? WolfPack.Instance.Wolves.Count : 0;
+        GUILayout.Label($"Lobos Activos: {totalWolves}");
 
-        GUILayout.BeginArea(new Rect(panelRect.x + 10f, panelRect.y + 8f, panelRect.width - 20f, panelRect.height - 16f));
-        GUILayout.Label("TELEMETRÍA CAZADOR (FSM & SENSORES)", headerStyle);
-        GUILayout.Label($"<b>Estado FSM:</b> {fsmState}   |   <b>Acción:</b> {visualMode}", textStyle);
-        GUILayout.Label($"<b>Objetivo Activo:</b> {targetText}", textStyle);
-        GUILayout.Label($"<b>Boids en Sensor:</b> {livingDetected} vivos / {deadDetected} caídos", textStyle);
-        GUILayout.Label($"<b>Cooldown TBA:</b> {tbaText}   |   <b>Cebos (POI):</b> {activePois}/5", textStyle);
-
-        if (hunter.FSM != null && hunter.FSM.CurrentKey == HunterStateId.Gather)
-        {
-            GUILayout.Label($"<b>Progreso Recolección:</b> {Mathf.RoundToInt(hunter.GatherProgress * 100f)}%", textStyle);
-        }
-
-        GUILayout.Space(4f);
-        GUILayout.Label("<b>Últimas Transiciones y Acciones:</b>", textStyle);
-        for (int i = 0; i < eventLog.Count; i++)
-        {
-            GUILayout.Label(eventLog[i], textStyle);
-        }
         GUILayout.EndArea();
     }
 }

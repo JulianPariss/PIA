@@ -4,7 +4,9 @@ public static class SteeringBehaviors
 {
     public static Vector3 DesiredVelocity(SteeringAgent agent, Vector3 direction)
     {
-        if (agent == null || direction.sqrMagnitude < 0.0001f) return Vector3.zero;
+        if (agent == null) return Vector3.zero;
+        if (agent.LockMovementToXZ) direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) return Vector3.zero;
         return direction.normalized * agent.MaxSpeed;
     }
 
@@ -12,6 +14,7 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 steeringForce = desiredVelocity - agent.Velocity;
+        if (agent.LockMovementToXZ) steeringForce.y = 0f;
         return Vector3.ClampMagnitude(steeringForce, agent.MaxSteering);
     }
 
@@ -19,6 +22,7 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 direction = targetPosition - agent.transform.position;
+        if (agent.LockMovementToXZ) direction.y = 0f;
         Vector3 desiredVelocity = DesiredVelocity(agent, direction);
         return Steer(agent, desiredVelocity);
     }
@@ -33,6 +37,11 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 toTarget = targetPosition - agent.transform.position;
+        if (agent.LockMovementToXZ)
+        {
+            toTarget.y = 0f;
+            targetVelocity.y = 0f;
+        }
         float distance = toTarget.magnitude;
         float combinedSpeed = agent.MaxSpeed + targetVelocity.magnitude;
         float lookAheadTime = combinedSpeed > 0.001f ? distance / combinedSpeed : 0f;
@@ -44,6 +53,7 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 direction = agent.transform.position - targetPosition;
+        if (agent.LockMovementToXZ) direction.y = 0f;
         Vector3 desiredVelocity = DesiredVelocity(agent, direction);
         return Steer(agent, desiredVelocity);
     }
@@ -52,6 +62,7 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 toTarget = targetPosition - agent.transform.position;
+        if (agent.LockMovementToXZ) toTarget.y = 0f;
         float distance = toTarget.magnitude;
 
         if (distance <= 0.001f)
@@ -89,6 +100,11 @@ public static class SteeringBehaviors
     {
         if (agent == null) return Vector3.zero;
         Vector3 toTarget = targetPosition - agent.transform.position;
+        if (agent.LockMovementToXZ)
+        {
+            toTarget.y = 0f;
+            targetVelocity.y = 0f;
+        }
         float distance = toTarget.magnitude;
         float combinedSpeed = agent.MaxSpeed + targetVelocity.magnitude;
         float lookAheadTime = combinedSpeed > 0.001f ? distance / combinedSpeed : 0f;

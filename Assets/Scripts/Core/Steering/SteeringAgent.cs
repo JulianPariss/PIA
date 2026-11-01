@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Serialization;
 
 public class SteeringAgent : MonoBehaviour
@@ -33,7 +33,7 @@ public class SteeringAgent : MonoBehaviour
     protected float initialY = 0f;
 
     public Vector3 Velocity => velocity;
-    public float MaxSpeed => maxSpeed;
+    public float MaxSpeed { get => maxSpeed; set => maxSpeed = value; }
     public float MaxSteering => maxSteering;
     public float Mass => mass;
     public float RotationSpeed => rotationSpeed;
@@ -92,6 +92,11 @@ public class SteeringAgent : MonoBehaviour
         acceleration = Vector3.zero;
     }
 
+    public void SetVelocity(Vector3 newVelocity)
+    {
+        velocity = newVelocity;
+    }
+
     protected virtual void Update()
     {
         IntegrateForces(Time.deltaTime);
@@ -125,12 +130,6 @@ public class SteeringAgent : MonoBehaviour
         acceleration = Vector3.zero;
     }
 
-    /// <summary>
-    /// Restricción cinemática de movimiento con deslizamiento contra muros (D-01 / Opción A).
-    /// NO es un sistema de percepción ni detección de agentes (R-05), sino la resolución
-    /// de colisiones de un agente cinemático para impedir atravesar paredes.
-    /// Utiliza SphereCast con 0 asignaciones de memoria (GC Free).
-    /// </summary>
     protected virtual void ResolveWallMovement(ref Vector3 pos, ref Vector3 vel, float deltaTime)
     {
         if (!enableWallCollision || obstacleMask == 0)
@@ -150,10 +149,8 @@ public class SteeringAgent : MonoBehaviour
 
         Vector3 moveDir = moveDelta / moveDist;
 
-        // Comprobación de colisión con SphereCast hacia la dirección de avance
         if (Physics.SphereCast(pos, bodyRadius, moveDir, out RaycastHit hit, moveDist + skinWidth, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            // Avanzar hasta la superficie respetando el margen de seguridad (skinWidth)
             float safeDistance = Mathf.Max(0f, hit.distance - skinWidth);
             pos += moveDir * safeDistance;
 
@@ -164,11 +161,9 @@ public class SteeringAgent : MonoBehaviour
                 if (hitNormal.sqrMagnitude > 0.001f) hitNormal.Normalize();
             }
 
-            // Proyectar velocidad sobre el plano tangente del muro para deslizar suavemente
             vel = Vector3.ProjectOnPlane(vel, hitNormal);
             if (lockMovementToXZ) vel.y = 0f;
 
-            // Desplazamiento remanente proyectado a lo largo de la pared
             float remainingRatio = 1f - (safeDistance / (moveDist + skinWidth));
             float remainingTime = remainingRatio * deltaTime;
             if (remainingTime > 0.0001f && vel.sqrMagnitude > 0.001f)
@@ -177,7 +172,6 @@ public class SteeringAgent : MonoBehaviour
                 float slideDist = slideDelta.magnitude;
                 Vector3 slideDir = slideDelta / slideDist;
 
-                // Chequeo secundario para esquinas (choque contra un segundo muro)
                 if (Physics.SphereCast(pos, bodyRadius, slideDir, out RaycastHit cornerHit, slideDist + skinWidth, obstacleMask, QueryTriggerInteraction.Ignore))
                 {
                     float cornerSafe = Mathf.Max(0f, cornerHit.distance - skinWidth);
@@ -193,7 +187,6 @@ public class SteeringAgent : MonoBehaviour
         }
         else
         {
-            // Sin colisión en la trayectoria, mover libremente
             pos += moveDelta;
         }
     }

@@ -1,109 +1,71 @@
 using UnityEngine;
 
-public class HunterStateLabel : MonoBehaviour
+namespace PIA1.UI
 {
-    [Header("Configuración")]
-    [SerializeField] private HunterNPC hunter;
-    [SerializeField] private float heightOffset = 2.3f;
-
-    private GUIStyle labelStyle;
-    private GUIStyle badgeStyle;
-    private static Texture2D badgeBackground;
-
-    private void Awake()
+    [RequireComponent(typeof(HunterNPC))]
+    public class HunterStateLabel : FloatingAgentLabel
     {
-        if (hunter == null)
-        {
-            hunter = GetComponent<HunterNPC>() ?? GetComponentInParent<HunterNPC>();
-        }
+        [SerializeField] private HunterNPC hunter;
 
-        InitStyles();
-    }
-
-    private static void InitStyles()
-    {
-        if (badgeBackground == null)
+        private void Start()
         {
-            badgeBackground = new Texture2D(1, 1);
-            badgeBackground.SetPixel(0, 0, new Color(0.08f, 0.08f, 0.08f, 0.85f));
-            badgeBackground.Apply();
-        }
-    }
-
-    private void EnsureStyles()
-    {
-        if (labelStyle == null)
-        {
-            labelStyle = new GUIStyle(GUI.skin.label)
+            if (hunter == null)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                fontSize = 12
+                hunter = GetComponent<HunterNPC>();
+            }
+            heightOffset = 2.3f;
+        }
+
+        protected override bool IsTargetActive()
+        {
+            return hunter != null && !hunter.IsDead;
+        }
+
+        protected override void UpdateLabelContent(out string text, out Color color)
+        {
+            if (hunter == null)
+            {
+                text = string.Empty;
+                color = Color.white;
+                return;
+            }
+
+            HunterStateId state = (hunter.FSM != null && hunter.FSM.HasState)
+                ? hunter.FSM.CurrentKey
+                : HunterStateId.Search;
+
+            int auxInt = state switch
+            {
+                HunterStateId.Gather => Mathf.RoundToInt(hunter.GatherProgress * 100f),
+                HunterStateId.Flee when hunter.IsWaitingInSafeZone => Mathf.CeilToInt(hunter.SafeZoneWaitRemaining * 10f),
+                _ => hunter.CurrentGathers
+            };
+
+            Boid activeTarget = (hunter.CurrentTarget != null && !hunter.CurrentTarget.isRespawning) ? hunter.CurrentTarget : null;
+            string safeName = hunter.ChosenSafeZone != null ? hunter.ChosenSafeZone.ZoneName : string.Empty;
+
+            string stateText = state switch
+            {
+                HunterStateId.Attack => "ATAQUE",
+                HunterStateId.Gather => $"RECOLECCIÓN {auxInt}%",
+                HunterStateId.Flee => hunter.IsWaitingInSafeZone
+                    ? $"REFUGIO {(auxInt * 0.1f):0.0}s"
+                    : (!string.IsNullOrEmpty(safeName) ? $"HUYENDO → {safeName}" : "HUYENDO"),
+                HunterStateId.Exit => $"SALIDA ({hunter.CurrentGathers}/{hunter.RequiredGathers})",
+                HunterStateId.Dead => "CAPTURADO",
+                _ => $"BÚSQUEDA ({hunter.CurrentGathers}/{hunter.RequiredGathers})"
+            };
+
+            text = activeTarget != null ? $"[{stateText}]  Obj: {activeTarget.name}" : $"[{stateText}]";
+
+            color = state switch
+            {
+                HunterStateId.Attack => new Color(1f, 0.25f, 0.25f),
+                HunterStateId.Gather => new Color(1f, 0.88f, 0.1f),
+                HunterStateId.Flee => new Color(1f, 0.55f, 0.1f),
+                HunterStateId.Exit => new Color(0.8f, 0.4f, 1f),
+                _ => new Color(0.3f, 0.95f, 0.4f)
             };
         }
-
-        if (badgeStyle == null)
-        {
-            badgeStyle = new GUIStyle(GUI.skin.box);
-            badgeStyle.normal.background = badgeBackground;
-            badgeStyle.padding = new RectOffset(6, 6, 2, 2);
-        }
-    }
-
-    private void OnGUI()
-    {
-        if (Event.current.type != EventType.Repaint) return;
-        if (hunter == null || !gameObject.activeInHierarchy) return;
-
-        Camera cam = Camera.main;
-        if (cam == null) return;
-
-        Vector3 worldPos = transform.position + Vector3.up * heightOffset;
-        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
-
-        if (screenPos.z <= 0.5f) return;
-
-        EnsureStyles();
-
-        string stateText;
-        Color stateColor;
-
-        switch (hunter.CurrentVisualMode)
-        {
-            case HunterVisualMode.Pursuit:
-                stateText = "PERSECUCIÓN";
-                stateColor = new Color(0.1f, 0.85f, 0.75f);
-                break;
-            case HunterVisualMode.Attack:
-                stateText = "ATAQUE";
-                stateColor = new Color(1f, 0.25f, 0.25f);
-                break;
-            case HunterVisualMode.Gather:
-                int pct = Mathf.RoundToInt(hunter.GatherProgress * 100f);
-                stateText = $"RECOLECCIÓN {pct}%";
-                stateColor = new Color(1f, 0.88f, 0.1f);
-                break;
-            case HunterVisualMode.Patrol:
-            default:
-                stateText = "PATRULLA";
-                stateColor = new Color(0.3f, 0.95f, 0.4f);
-                break;
-        }
-
-        string displayText = $"[{stateText}]";
-        if (hunter.CurrentTarget != null && !hunter.CurrentTarget.isRespawning)
-        {
-            displayText += $"  Objetivo: {hunter.CurrentTarget.name}";
-        }
-
-        Vector2 size = labelStyle.CalcSize(new GUIContent(displayText)) + new Vector2(16, 6);
-        float x = screenPos.x - (size.x * 0.5f);
-        float y = Screen.height - screenPos.y - size.y;
-
-        Rect badgeRect = new Rect(x, y, size.x, size.y);
-        GUI.Box(badgeRect, GUIContent.none, badgeStyle);
-
-        labelStyle.normal.textColor = stateColor;
-        GUI.Label(badgeRect, displayText, labelStyle);
     }
 }

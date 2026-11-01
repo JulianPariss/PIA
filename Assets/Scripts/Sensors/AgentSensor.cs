@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using PIA1.Agents.Wolves;
 
 public class AgentSensor : MonoBehaviour
 {
@@ -10,6 +11,7 @@ public class AgentSensor : MonoBehaviour
 
     private readonly List<Boid> detectedBoids = new List<Boid>();
     private readonly List<PointOfInterest> detectedPOIs = new List<PointOfInterest>();
+    private readonly List<Wolf> detectedWolves = new List<Wolf>();
     private HunterNPC detectedHunter;
 
     public event Action<Boid> OnBoidEntered;
@@ -33,11 +35,20 @@ public class AgentSensor : MonoBehaviour
         }
     }
 
+    public IReadOnlyList<Wolf> Wolves
+    {
+        get
+        {
+            PurgeInactiveWolves();
+            return detectedWolves;
+        }
+    }
+
     public HunterNPC Hunter
     {
         get
         {
-            if (detectedHunter == null || !detectedHunter.gameObject.activeInHierarchy)
+            if (detectedHunter == null || !detectedHunter.gameObject.activeInHierarchy || detectedHunter.IsDead)
             {
                 detectedHunter = null;
             }
@@ -112,6 +123,18 @@ public class AgentSensor : MonoBehaviour
             }
             return;
         }
+
+        Wolf wolf = other.GetComponent<Wolf>() ?? other.GetComponentInParent<Wolf>();
+        if (wolf != null)
+        {
+            if (transform.IsChildOf(wolf.transform)) return;
+
+            if (!detectedWolves.Contains(wolf))
+            {
+                detectedWolves.Add(wolf);
+            }
+            return;
+        }
     }
 
     private void OnTriggerExit(Collider other)
@@ -142,12 +165,20 @@ public class AgentSensor : MonoBehaviour
             detectedPOIs.Remove(poi);
             return;
         }
+
+        Wolf wolf = other.GetComponent<Wolf>() ?? other.GetComponentInParent<Wolf>();
+        if (wolf != null)
+        {
+            detectedWolves.Remove(wolf);
+            return;
+        }
     }
 
     public void Clear()
     {
         detectedBoids.Clear();
         detectedPOIs.Clear();
+        detectedWolves.Clear();
         detectedHunter = null;
     }
 
@@ -171,6 +202,18 @@ public class AgentSensor : MonoBehaviour
             if (poi == null || !poi.gameObject.activeInHierarchy || poi.currentHealth <= 0f)
             {
                 detectedPOIs.RemoveAt(i);
+            }
+        }
+    }
+
+    private void PurgeInactiveWolves()
+    {
+        for (int i = detectedWolves.Count - 1; i >= 0; i--)
+        {
+            Wolf w = detectedWolves[i];
+            if (w == null || !w.gameObject.activeInHierarchy)
+            {
+                detectedWolves.RemoveAt(i);
             }
         }
     }

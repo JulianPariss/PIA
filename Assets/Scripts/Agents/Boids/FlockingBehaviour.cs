@@ -18,9 +18,26 @@ public class FlockingBehaviour : MonoBehaviour
     [Range(0f, 3f)]
     [SerializeField] private float separationWeight = 1.8f;
 
+    [Header("Gizmos de Flocking y Percepción")]
+    [SerializeField] private bool showGizmos = true;
+    [SerializeField] private bool showOnlyWhenSelected = false;
+    [SerializeField] private Color separationColor = new Color(1f, 0.25f, 0.25f, 0.7f);
+    [SerializeField] private Color alignmentColor = new Color(0.25f, 0.65f, 1f, 0.65f);
+    [SerializeField] private Color cohesionColor = new Color(0.25f, 1f, 0.45f, 0.55f);
+    [SerializeField] private Color visionColor = new Color(1f, 0.92f, 0.016f, 0.4f);
+
+    private AgentSensor cachedSensor;
+
     public float SeparationRadius => separationRadius;
     public float AlignmentRadius => alignmentRadius;
     public float CohesionRadius => cohesionRadius;
+    public bool ShowGizmos { get => showGizmos; set => showGizmos = value; }
+    public bool ShowOnlyWhenSelected { get => showOnlyWhenSelected; set => showOnlyWhenSelected = value; }
+
+    private void Awake()
+    {
+        cachedSensor = GetComponentInChildren<AgentSensor>();
+    }
 
     private void OnValidate()
     {
@@ -36,7 +53,10 @@ public class FlockingBehaviour : MonoBehaviour
 
     public Vector3 ComputeFlocking(SteeringAgent self, IReadOnlyList<Boid> neighbors)
     {
-        if (self == null || neighbors == null || neighbors.Count == 0) return Vector3.zero;
+        if (self == null || neighbors == null || neighbors.Count == 0)
+        {
+            return Vector3.zero;
+        }
 
         Vector3 separationForce = Separation(self, neighbors) * separationWeight;
         Vector3 alignmentForce = Alignment(self, neighbors) * alignmentWeight;
@@ -47,7 +67,11 @@ public class FlockingBehaviour : MonoBehaviour
 
     public Vector3 ComputeSeparationOnly(SteeringAgent self, IReadOnlyList<Boid> neighbors)
     {
-        if (self == null || neighbors == null || neighbors.Count == 0) return Vector3.zero;
+        if (self == null || neighbors == null || neighbors.Count == 0)
+        {
+            return Vector3.zero;
+        }
+
         return Separation(self, neighbors) * separationWeight;
     }
 
@@ -61,7 +85,10 @@ public class FlockingBehaviour : MonoBehaviour
         for (int i = 0; i < neighbors.Count; i++)
         {
             Boid other = neighbors[i];
-            if (other == null || other == self || !other.IsAlive) continue;
+            if (other == null || other == self || !other.IsAlive)
+            {
+                continue;
+            }
 
             Vector3 diff = selfPos - other.transform.position;
             diff.y = 0f;
@@ -69,13 +96,15 @@ public class FlockingBehaviour : MonoBehaviour
 
             if (sqrDist > 0.0001f && sqrDist <= sqrSeparation)
             {
-                float dist = Mathf.Sqrt(sqrDist);
-                repulsion += diff / (dist * dist);
+                repulsion += diff / sqrDist;
                 count++;
             }
         }
 
-        if (count == 0 || repulsion.sqrMagnitude < 0.0001f) return Vector3.zero;
+        if (count == 0 || repulsion.sqrMagnitude < 0.0001f)
+        {
+            return Vector3.zero;
+        }
 
         Vector3 desired = SteeringBehaviors.DesiredVelocity(self, repulsion);
         return SteeringBehaviors.Steer(self, desired);
@@ -91,7 +120,10 @@ public class FlockingBehaviour : MonoBehaviour
         for (int i = 0; i < neighbors.Count; i++)
         {
             Boid other = neighbors[i];
-            if (other == null || other == self || !other.IsAlive) continue;
+            if (other == null || other == self || !other.IsAlive)
+            {
+                continue;
+            }
 
             Vector3 diff = other.transform.position - selfPos;
             diff.y = 0f;
@@ -103,7 +135,10 @@ public class FlockingBehaviour : MonoBehaviour
             }
         }
 
-        if (count == 0 || avgVelocity.sqrMagnitude < 0.0001f) return Vector3.zero;
+        if (count == 0 || avgVelocity.sqrMagnitude < 0.0001f)
+        {
+            return Vector3.zero;
+        }
 
         Vector3 desired = SteeringBehaviors.DesiredVelocity(self, avgVelocity);
         return SteeringBehaviors.Steer(self, desired);
@@ -119,7 +154,10 @@ public class FlockingBehaviour : MonoBehaviour
         for (int i = 0; i < neighbors.Count; i++)
         {
             Boid other = neighbors[i];
-            if (other == null || other == self || !other.IsAlive) continue;
+            if (other == null || other == self || !other.IsAlive)
+            {
+                continue;
+            }
 
             Vector3 diff = other.transform.position - selfPos;
             diff.y = 0f;
@@ -131,24 +169,53 @@ public class FlockingBehaviour : MonoBehaviour
             }
         }
 
-        if (count == 0) return Vector3.zero;
+        if (count == 0)
+        {
+            return Vector3.zero;
+        }
 
         centerOfMass /= count;
         centerOfMass.y = selfPos.y;
         return SteeringBehaviors.Seek(self, centerOfMass);
     }
 
+    private void OnDrawGizmos()
+    {
+        if (showGizmos && !showOnlyWhenSelected)
+        {
+            DrawFlockingGizmosInternal();
+        }
+    }
+
     private void OnDrawGizmosSelected()
+    {
+        if (showGizmos && showOnlyWhenSelected)
+        {
+            DrawFlockingGizmosInternal();
+        }
+    }
+
+    private void DrawFlockingGizmosInternal()
     {
         Vector3 pos = transform.position;
 
-        Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.6f);
+        Gizmos.color = separationColor;
         Gizmos.DrawWireSphere(pos, separationRadius);
 
-        Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.6f);
+        Gizmos.color = alignmentColor;
         Gizmos.DrawWireSphere(pos, alignmentRadius);
 
-        Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.4f);
+        Gizmos.color = cohesionColor;
         Gizmos.DrawWireSphere(pos, cohesionRadius);
+
+        float maxFlock = Mathf.Max(alignmentRadius, cohesionRadius);
+        if (cachedSensor == null)
+        {
+            cachedSensor = GetComponentInChildren<AgentSensor>();
+        }
+        float visRadius = cachedSensor != null ? cachedSensor.Radius : maxFlock;
+
+        Gizmos.color = visionColor;
+        Gizmos.DrawWireSphere(pos, visRadius);
     }
 }

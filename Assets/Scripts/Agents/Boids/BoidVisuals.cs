@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 
 [RequireComponent(typeof(Health), typeof(Boid))]
@@ -15,6 +14,8 @@ public class BoidVisuals : MonoBehaviour
     private Boid boid;
     private Renderer[] meshRenderers;
     private MaterialPropertyBlock propBlock;
+    private Color lastColor;
+    private bool hasColor;
 
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -69,12 +70,22 @@ public class BoidVisuals : MonoBehaviour
 
     private void HandleDied()
     {
+        hasColor = false;
         ApplyColor(deadColor);
     }
 
     private void UpdateVisuals()
     {
-        if (boid == null || meshRenderers == null || meshRenderers.Length == 0) return;
+        if (boid == null || meshRenderers == null || meshRenderers.Length == 0)
+        {
+            return;
+        }
+
+        if (boid.IsRespawning)
+        {
+            hasColor = false;
+            return;
+        }
 
         if (!boid.IsAlive)
         {
@@ -102,17 +113,31 @@ public class BoidVisuals : MonoBehaviour
 
     public void ApplyColor(Color color)
     {
-        if (meshRenderers == null) return;
+        if (hasColor && lastColor == color)
+        {
+            return;
+        }
+
+        if (meshRenderers == null)
+        {
+            return;
+        }
 
         for (int i = 0; i < meshRenderers.Length; i++)
         {
             Renderer rend = meshRenderers[i];
-            if (rend == null) continue;
+            if (rend == null)
+            {
+                continue;
+            }
 
             rend.GetPropertyBlock(propBlock);
             propBlock.SetColor(BaseColorId, color);
             propBlock.SetColor(ColorId, color);
             rend.SetPropertyBlock(propBlock);
         }
+
+        lastColor = color;
+        hasColor = true;
     }
 }

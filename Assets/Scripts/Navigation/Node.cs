@@ -4,10 +4,6 @@ using PIA1.World;
 
 namespace PIA1.Navigation
 {
-    /// <summary>
-    /// Representa un nodo en el grafo de navegación del escenario para el algoritmo A*.
-    /// Cumple con la consigna R-07 (grafo propio de nodos + listas de adyacencia).
-    /// </summary>
     [SelectionBase]
     public class Node : MonoBehaviour
     {
@@ -29,6 +25,22 @@ namespace PIA1.Navigation
         public bool IsWalkable { get => isWalkable; set => isWalkable = value; }
         public bool IsSafeZone { get => isSafeZone; set => isSafeZone = value; }
         public ZoneType Zone { get => zone; set => zone = value; }
+
+        private void OnEnable()
+        {
+            if (Graph.Instance != null)
+            {
+                Graph.Instance.RegisterNode(this);
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (Graph.Instance != null)
+            {
+                Graph.Instance.UnregisterNode(this);
+            }
+        }
 
         public void AddNeighbor(Node neighbor, bool bidirectional = true)
         {
@@ -72,10 +84,6 @@ namespace PIA1.Navigation
             return neighbors.Contains(neighbor);
         }
 
-        /// <summary>
-        /// Detecta automáticamente a qué ZoneArea pertenece según su posición en el mundo.
-        /// Si no se encuentra dentro de ninguna ZoneArea delimitada, se marca como nodo de pasillo (Corridor).
-        /// </summary>
         public void AutoDetectZone()
         {
             ZoneArea detected = ZoneArea.GetZoneAt(transform.position);
@@ -143,21 +151,21 @@ namespace PIA1.Navigation
         private Color GetNodeColor()
         {
             if (!isWalkable) return Color.red;
-            if (isSafeZone) return new Color(1f, 0.85f, 0.1f); // Amarillo (Zona Segura / Refugio)
+            if (isSafeZone) return new Color(1f, 0.85f, 0.1f);
 
             switch (zone)
             {
                 case ZoneType.InitialZone:
-                    return new Color(0.2f, 0.6f, 1f); // Azul cielo (Zona Inicial)
+                    return new Color(0.2f, 0.6f, 1f);
                 case ZoneType.Coto:
-                    return new Color(0.2f, 0.9f, 0.35f); // Verde esmeralda (Coto de Caza)
+                    return new Color(0.2f, 0.9f, 0.35f);
                 case ZoneType.SafeZone:
-                    return new Color(1f, 0.85f, 0.1f); // Amarillo (Zona Segura)
+                    return new Color(1f, 0.85f, 0.1f);
                 case ZoneType.ExitZone:
-                    return new Color(0.9f, 0.2f, 0.85f); // Magenta (Salida)
+                    return new Color(0.9f, 0.2f, 0.85f);
                 case ZoneType.Corridor:
                 default:
-                    return new Color(0.75f, 0.3f, 0.95f); // Violeta tradicional del grafo (Pasillos)
+                    return new Color(0.75f, 0.3f, 0.95f);
             }
         }
     }

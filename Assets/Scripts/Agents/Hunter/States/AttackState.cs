@@ -7,7 +7,6 @@ public class AttackState : State<HunterStateId>
 
     private bool isAttacking = false;
     private float attackTimer = 0f;
-    private Boid attackTargetSaved = null;
 
     public AttackState(StateMachine<HunterStateId> fsm, HunterNPC hunter, AttackData data) : base(fsm)
     {
@@ -19,25 +18,37 @@ public class AttackState : State<HunterStateId>
     {
         isAttacking = false;
         attackTimer = 0f;
-        attackTargetSaved = null;
+        hunter.NavAgent?.StopNavigation();
 
-        Boid target = hunter.SelectAttackTarget();
-        hunter.CurrentTarget = target;
-
-        if (target == null || target.isRespawning)
+        Boid target = hunter.CurrentTarget;
+        if (target == null || !target.IsAlive || target.isRespawning || !hunter.IsInVision(target))
         {
-            fsm.ChangeState(HunterStateId.Patrol);
-            return;
+            target = hunter.SelectAttackTarget();
+            hunter.CurrentTarget = target;
         }
 
-        if (target.isDead)
+        if (target == null || !target.IsAlive || target.isRespawning)
         {
-            fsm.ChangeState(HunterStateId.Gather);
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Search);
         }
     }
 
     public override void Tick()
     {
+        if (hunter.TryConsumePendingCapture())
+        {
+            fsm.ChangeState(HunterStateId.Dead);
+            return;
+        }
+
+        if (hunter.ShouldFleeFromWolf())
+        {
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Flee);
+            return;
+        }
+
         if (isAttacking)
         {
             hunter.Agent.Stop();
@@ -47,34 +58,24 @@ public class AttackState : State<HunterStateId>
             if (attackTimer >= data.attackDuration)
             {
                 isAttacking = false;
-                if (attackTargetSaved != null && attackTargetSaved.isDead)
-                {
-                    fsm.ChangeState(HunterStateId.Gather);
-                }
-                else
-                {
-                    fsm.ChangeState(HunterStateId.Patrol);
-                }
+                hunter.CurrentTarget = null;
+                fsm.ChangeState(HunterStateId.Search);
             }
             return;
         }
 
         Boid target = hunter.CurrentTarget;
-        if (target == null || target.isRespawning)
+        if (target == null || target.isRespawning || target.isDead)
         {
-            fsm.ChangeState(HunterStateId.Patrol);
-            return;
-        }
-
-        if (target.isDead)
-        {
-            fsm.ChangeState(HunterStateId.Gather);
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Search);
             return;
         }
 
         if (!hunter.IsInVision(target))
         {
-            fsm.ChangeState(HunterStateId.Patrol);
+            hunter.CurrentTarget = null;
+            fsm.ChangeState(HunterStateId.Search);
             return;
         }
 
@@ -96,9 +97,9 @@ public class AttackState : State<HunterStateId>
             return;
         }
 
+        hunter.NavAgent?.StopNavigation();
         hunter.SetVisualMode(HunterVisualMode.Pursuit);
         Vector3 pursuitForce = SteeringBehaviors.Pursuit(hunter.Agent, target);
-        pursuitForce.y = 0f;
         hunter.Agent.ApplyForce(pursuitForce);
     }
 
@@ -106,8 +107,8 @@ public class AttackState : State<HunterStateId>
     {
         isAttacking = true;
         attackTimer = 0f;
-        attackTargetSaved = target;
 
+        hunter.NavAgent?.StopNavigation();
         hunter.Agent.Stop();
         hunter.SetVisualMode(HunterVisualMode.Attack);
 
@@ -121,6 +122,6 @@ public class AttackState : State<HunterStateId>
     {
         isAttacking = false;
         attackTimer = 0f;
-        attackTargetSaved = null;
+        hunter.NavAgent?.StopNavigation();
     }
 }

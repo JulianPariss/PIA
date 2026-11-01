@@ -12,11 +12,6 @@ namespace PIA1.World
         Corridor = 4
     }
 
-    /// <summary>
-    /// Componente que delimita e identifica visualmente una de las zonas obligatorias
-    /// de la consigna (Zona Inicial, Coto de Caza, Zona Segura, Salida).
-    /// Mantiene un registro estático para consultas globales sin GC.
-    /// </summary>
     [RequireComponent(typeof(BoxCollider))]
     public class ZoneArea : MonoBehaviour
     {
@@ -28,7 +23,11 @@ namespace PIA1.World
         [SerializeField] private bool showGizmos = true;
 
         private BoxCollider _boxCollider;
+        private Vector3 _center;
+        private Vector3 _halfSize;
+
         private static readonly List<ZoneArea> ActiveZones = new List<ZoneArea>();
+        private static readonly List<ZoneArea> SafeZones = new List<ZoneArea>();
 
         public ZoneType Type => zoneType;
         public string ZoneName => zoneName;
@@ -40,82 +39,76 @@ namespace PIA1.World
 
         private void Awake()
         {
-            _boxCollider = GetComponent<BoxCollider>();
+            CacheCollider();
             if (_boxCollider != null)
             {
                 _boxCollider.isTrigger = true;
             }
         }
 
+        private void CacheCollider()
+        {
+            if (_boxCollider == null)
+            {
+                _boxCollider = GetComponent<BoxCollider>();
+            }
+            if (_boxCollider != null)
+            {
+                _center = _boxCollider.center;
+                _halfSize = _boxCollider.size * 0.5f;
+            }
+        }
+
         private void OnEnable()
         {
+            CacheCollider();
+
             if (!ActiveZones.Contains(this))
             {
                 ActiveZones.Add(this);
+            }
+
+            if (zoneType == ZoneType.SafeZone && !SafeZones.Contains(this))
+            {
+                SafeZones.Add(this);
             }
         }
 
         private void OnDisable()
         {
             ActiveZones.Remove(this);
+            SafeZones.Remove(this);
         }
 
-        /// <summary>
-        /// Comprueba si un punto en espacio de mundo está contenido dentro de los límites de la zona.
-        /// Evalúa en el plano horizontal del volumen para tolerar diferencias de altura Y entre piso/nodos/agentes.
-        /// </summary>
         public bool Contains(Vector3 worldPosition)
         {
             if (_boxCollider == null)
             {
-                _boxCollider = GetComponent<BoxCollider>();
-            }
-
-            if (_boxCollider == null) return false;
-
-            // Convertimos el punto al espacio local del transform y comprobamos contra center y size/2 en XZ
-            Vector3 localPos = transform.InverseTransformPoint(worldPosition) - _boxCollider.center;
-            Vector3 halfSize = _boxCollider.size * 0.5f;
-
-            return Mathf.Abs(localPos.x) <= halfSize.x + 0.01f &&
-                   Mathf.Abs(localPos.z) <= halfSize.z + 0.01f;
-        }
-
-        #region Static Queries
-
-        public static IReadOnlyList<ZoneArea> AllZones
-        {
-            get
-            {
-                EnsureZonesPopulated();
-                return ActiveZones;
-            }
-        }
-
-        private static void EnsureZonesPopulated()
-        {
-            if (!Application.isPlaying || ActiveZones.Count == 0)
-            {
-                ActiveZones.Clear();
-                ZoneArea[] found = Object.FindObjectsByType<ZoneArea>(FindObjectsSortMode.None);
-                for (int i = 0; i < found.Length; i++)
+                CacheCollider();
+                if (_boxCollider == null)
                 {
-                    if (found[i] != null && !ActiveZones.Contains(found[i]))
-                    {
-                        ActiveZones.Add(found[i]);
-                    }
+                    return false;
                 }
             }
+
+            Vector3 localPos = transform.InverseTransformPoint(worldPosition) - _center;
+
+            return Mathf.Abs(localPos.x) <= _halfSize.x + 0.01f &&
+                   Mathf.Abs(localPos.z) <= _halfSize.z + 0.01f;
         }
+
+        public static IReadOnlyList<ZoneArea> AllZones => ActiveZones;
+
+        public static IReadOnlyList<ZoneArea> SafeZonesList => SafeZones;
 
         public static ZoneArea GetZoneAt(Vector3 worldPosition)
         {
-            EnsureZonesPopulated();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
-                if (ActiveZones[i] != null && ActiveZones[i].Contains(worldPosition))
+                ZoneArea zone = ActiveZones[i];
+                if (zone != null && zone.Contains(worldPosition))
                 {
-                    return ActiveZones[i];
+                    return zone;
                 }
             }
             return null;
@@ -123,11 +116,10 @@ namespace PIA1.World
 
         public static bool IsPositionInSafeZone(Vector3 worldPosition)
         {
-            EnsureZonesPopulated();
-            for (int i = 0; i < ActiveZones.Count; i++)
+            for (int i = 0; i < SafeZones.Count; i++)
             {
-                ZoneArea zone = ActiveZones[i];
-                if (zone != null && zone.Type == ZoneType.SafeZone && zone.Contains(worldPosition))
+                ZoneArea zone = SafeZones[i];
+                if (zone != null && zone.Contains(worldPosition))
                 {
                     return true;
                 }
@@ -137,12 +129,12 @@ namespace PIA1.World
 
         public static ZoneArea GetZone(ZoneType type)
         {
-            EnsureZonesPopulated();
             for (int i = 0; i < ActiveZones.Count; i++)
             {
-                if (ActiveZones[i] != null && ActiveZones[i].Type == type)
+                ZoneArea zone = ActiveZones[i];
+                if (zone != null && zone.Type == type)
                 {
-                    return ActiveZones[i];
+                    return zone;
                 }
             }
             return null;
@@ -150,28 +142,18 @@ namespace PIA1.World
 
         public static List<ZoneArea> GetSafeZones()
         {
-            EnsureZonesPopulated();
-            var result = new List<ZoneArea>();
-            for (int i = 0; i < ActiveZones.Count; i++)
-            {
-                if (ActiveZones[i] != null && ActiveZones[i].Type == ZoneType.SafeZone)
-                {
-                    result.Add(ActiveZones[i]);
-                }
-            }
-            return result;
+            return SafeZones;
         }
 
         public static ZoneArea GetNearestSafeZone(Vector3 fromPosition)
         {
-            EnsureZonesPopulated();
             ZoneArea nearest = null;
             float minSqrDist = float.MaxValue;
 
-            for (int i = 0; i < ActiveZones.Count; i++)
+            for (int i = 0; i < SafeZones.Count; i++)
             {
-                ZoneArea zone = ActiveZones[i];
-                if (zone != null && zone.Type == ZoneType.SafeZone)
+                ZoneArea zone = SafeZones[i];
+                if (zone != null)
                 {
                     float sqrDist = (zone.Bounds.center - fromPosition).sqrMagnitude;
                     if (sqrDist < minSqrDist)
@@ -184,13 +166,12 @@ namespace PIA1.World
             return nearest;
         }
 
-        #endregion
-
-        #region Gizmos
-
         private void OnDrawGizmos()
         {
-            if (!showGizmos) return;
+            if (!showGizmos)
+            {
+                return;
+            }
 
             Color c = GetDefaultColorForType(zoneType);
             c.a = 0.25f;
@@ -220,18 +201,16 @@ namespace PIA1.World
             switch (type)
             {
                 case ZoneType.InitialZone:
-                    return new Color(0.2f, 0.6f, 1f); // Azul cielo
+                    return new Color(0.2f, 0.6f, 1f);
                 case ZoneType.Coto:
-                    return new Color(0.2f, 0.9f, 0.3f); // Verde
+                    return new Color(0.2f, 0.9f, 0.3f);
                 case ZoneType.SafeZone:
-                    return new Color(1f, 0.85f, 0.1f); // Amarillo / Dorado
+                    return new Color(1f, 0.85f, 0.1f);
                 case ZoneType.ExitZone:
-                    return new Color(0.8f, 0.2f, 0.9f); // Magenta / Violeta
+                    return new Color(0.8f, 0.2f, 0.9f);
                 default:
                     return Color.white;
             }
         }
-
-        #endregion
     }
 }

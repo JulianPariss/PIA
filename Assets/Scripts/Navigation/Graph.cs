@@ -1,14 +1,10 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using PIA1.World;
 
 namespace PIA1.Navigation
 {
-    /// <summary>
-    /// Componente central que gestiona la red de nodos del escenario para el algoritmo A*.
-    /// Cumple con la consigna R-07 (grafo propio con nodos y listas de adyacencia, sin matriz ni NavMesh)
-    /// y utiliza un buffer reutilizable para 0 asignaciones de memoria (GC Free) en runtime.
-    /// </summary>
     public class Graph : MonoBehaviour
     {
         public static Graph Instance { get; private set; }
@@ -36,6 +32,22 @@ namespace PIA1.Navigation
 
         public IReadOnlyList<Node> Nodes => nodes;
 
+        public void RegisterNode(Node node)
+        {
+            if (node != null && !nodes.Contains(node))
+            {
+                nodes.Add(node);
+            }
+        }
+
+        public void UnregisterNode(Node node)
+        {
+            if (node != null)
+            {
+                nodes.Remove(node);
+            }
+        }
+
         private void Awake()
         {
             if (Instance == null)
@@ -58,8 +70,6 @@ namespace PIA1.Navigation
                 FindNodesInScene();
             }
 
-            // Salvaguarda en runtime: si los nodos aún no fueron conectados o clasificados en el Editor,
-            // se inicializan una única vez en Awake al arrancar la simulación.
             bool anyConnected = false;
             for (int i = 0; i < nodes.Count; i++)
             {
@@ -85,9 +95,6 @@ namespace PIA1.Navigation
             }
         }
 
-        /// <summary>
-        /// Obtiene el nodo más cercano a una posición determinada (0 GC).
-        /// </summary>
         public Node GetClosestNode(Vector3 position, bool excludeSafeZones = false)
         {
             Node closest = null;
@@ -110,10 +117,6 @@ namespace PIA1.Navigation
             return closest;
         }
 
-        /// <summary>
-        /// Obtiene el nodo más cercano que tenga línea de visión directa despejada (sin chocar con Obstacle).
-        /// Si no hay ninguno con visión directa, retorna el nodo más cercano euclidiano (0 GC).
-        /// </summary>
         public Node GetClosestVisibleNode(Vector3 position, float eyeHeight = 0.8f, bool excludeSafeZones = false)
         {
             if (obstacleMask == 0)
@@ -148,9 +151,6 @@ namespace PIA1.Navigation
             return closest != null ? closest : GetClosestNode(position, excludeSafeZones);
         }
 
-        /// <summary>
-        /// Retorna un nodo transitable aleatorio dentro del Coto de Caza (0 GC).
-        /// </summary>
         public Node GetRandomCotoNode()
         {
             _queryBuffer.Clear();
@@ -179,9 +179,6 @@ namespace PIA1.Navigation
             return _queryBuffer[UnityEngine.Random.Range(0, _queryBuffer.Count)];
         }
 
-        /// <summary>
-        /// Retorna un nodo transitable aleatorio dentro de una zona específica (0 GC).
-        /// </summary>
         public Node GetRandomNodeInZone(ZoneType zone, bool excludeSafeZones = false)
         {
             _queryBuffer.Clear();
@@ -200,9 +197,6 @@ namespace PIA1.Navigation
             return _queryBuffer[UnityEngine.Random.Range(0, _queryBuffer.Count)];
         }
 
-        /// <summary>
-        /// Llena la lista suministrada con todos los nodos asociados a una zona determinada (0 GC).
-        /// </summary>
         public void GetNodesInZoneNonAlloc(ZoneType zone, List<Node> results, bool excludeSafeZones = false)
         {
             if (results == null) return;
@@ -219,17 +213,63 @@ namespace PIA1.Navigation
             }
         }
 
+        public Node GetClosestNode(Vector3 position, Func<Node, bool> filter)
+        {
+            Node closest = null;
+            float minSqrDist = float.MaxValue;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                Node node = nodes[i];
+                if (node == null || !node.IsWalkable) continue;
+                if (filter != null && !filter(node)) continue;
+
+                float sqrDist = (node.Position - position).sqrMagnitude;
+                if (sqrDist < minSqrDist)
+                {
+                    minSqrDist = sqrDist;
+                    closest = node;
+                }
+            }
+
+            return closest;
+        }
+
+        public Node GetRandomNode(Func<Node, bool> filter)
+        {
+            _queryBuffer.Clear();
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                Node node = nodes[i];
+                if (node == null || !node.IsWalkable) continue;
+                if (filter != null && !filter(node)) continue;
+                _queryBuffer.Add(node);
+            }
+
+            if (_queryBuffer.Count == 0) return null;
+            return _queryBuffer[UnityEngine.Random.Range(0, _queryBuffer.Count)];
+        }
+
+        public void GetNodesNonAlloc(Func<Node, bool> filter, List<Node> results)
+        {
+            if (results == null) return;
+            results.Clear();
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                Node node = nodes[i];
+                if (node == null || !node.IsWalkable) continue;
+                if (filter != null && !filter(node)) continue;
+                results.Add(node);
+            }
+        }
+
         #region Editor Utilities
 
         [ContextMenu("Find All Nodes in Scene")]
         public void FindNodesInScene()
         {
             nodes.Clear();
-            Node[] foundNodes = GetComponentsInChildren<Node>();
-            if (foundNodes.Length == 0)
-            {
-                foundNodes = FindObjectsByType<Node>(FindObjectsSortMode.None);
-            }
+            Node[] foundNodes = GetComponentsInChildren<Node>(true);
 
             for (int i = 0; i < foundNodes.Length; i++)
             {
@@ -240,7 +280,6 @@ namespace PIA1.Navigation
             }
 
             MarkGraphDirty();
-            Debug.Log($"[Graph] Se registraron {nodes.Count} nodos en el grafo.");
         }
 
         [ContextMenu("Auto Connect Visible Neighbors")]
@@ -263,13 +302,10 @@ namespace PIA1.Navigation
             }
 #endif
 
-            // 1. Actualizamos las zonas de cada nodo según las ZoneAreas de la escena
             AutoDetectZonesFromZoneAreas();
 
-            // 2. Limpiamos conexiones previas para generar un grafo limpio y consistente
             ClearAllConnections();
 
-            int connectionsCreated = 0;
             float maxSqrDist = maxConnectionDistance * maxConnectionDistance;
 
             var candidates = new List<(Node a, Node b, float dist)>();
@@ -300,7 +336,6 @@ namespace PIA1.Navigation
                 }
             }
 
-            // Ordenamos candidatos de menor a mayor distancia para conectar primero los tramos cortos inmediatos
             candidates.Sort((x, y) => x.dist.CompareTo(y.dist));
 
             for (int k = 0; k < candidates.Count; k++)
@@ -315,8 +350,6 @@ namespace PIA1.Navigation
                     }
                 }
 
-                // Poda segura de conexiones redundantes: solo omitimos el salto largo (a-b)
-                // si ya existe un nodo intermedio 'c' conectado tanto con 'a' como con 'b' casi en línea recta.
                 if (pruneRedundantConnections)
                 {
                     bool hasIntermediate = false;
@@ -345,11 +378,9 @@ namespace PIA1.Navigation
                 }
 
                 a.AddNeighbor(b, bidirectional: true);
-                connectionsCreated++;
             }
 
             MarkGraphDirty();
-            Debug.Log($"[Graph] AutoConnect finalizado. Conexiones bidireccionales creadas: {connectionsCreated}");
         }
 
         [ContextMenu("Auto Detect Zones From ZoneAreas")]
@@ -360,18 +391,15 @@ namespace PIA1.Navigation
                 FindNodesInScene();
             }
 
-            int updated = 0;
             for (int i = 0; i < nodes.Count; i++)
             {
                 if (nodes[i] != null)
                 {
                     nodes[i].AutoDetectZone();
-                    updated++;
                 }
             }
 
             MarkGraphDirty();
-            Debug.Log($"[Graph] Zonas autodetectadas para {updated} nodos.");
         }
 
         [ContextMenu("Clear All Connections")]
@@ -386,7 +414,6 @@ namespace PIA1.Navigation
             }
 
             MarkGraphDirty();
-            Debug.Log("[Graph] Todas las conexiones entre nodos han sido eliminadas.");
         }
 
         private void MarkGraphDirty()

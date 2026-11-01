@@ -1,6 +1,9 @@
 public enum HunterStateId
 {
-    Patrol,
+    Search,
     Attack,
-    Gather
+    Gather,
+    Flee,
+    Exit,
+    Dead
 }

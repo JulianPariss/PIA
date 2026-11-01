@@ -37,8 +37,10 @@ public class Boid : SteeringAgent
     public BoidLifeState LifeState => lifeState;
     public bool IsAlive => lifeState == BoidLifeState.Alive;
     public bool IsCollectable => lifeState == BoidLifeState.Dead;
-    public bool isDead => !IsAlive;
-    public bool isRespawning => lifeState == BoidLifeState.Collected;
+    public bool IsDead => !IsAlive;
+    public bool IsRespawning => lifeState == BoidLifeState.Collected;
+    public bool isDead => IsDead;
+    public bool isRespawning => IsRespawning;
     public Health Health => health;
     public AgentSensor Sensor => sensor;
 
@@ -66,8 +68,21 @@ public class Boid : SteeringAgent
         health.OnDied += Die;
     }
 
+    protected virtual void OnDestroy()
+    {
+        if (health != null)
+        {
+            health.OnDied -= Die;
+        }
+    }
+
     protected virtual void Start()
     {
+        if (bounds == null)
+        {
+            bounds = SimulationBounds.Instance;
+        }
+
         if (Velocity.sqrMagnitude < 0.001f)
         {
             velocity = transform.forward * (MaxSpeed * 0.5f);
@@ -82,24 +97,35 @@ public class Boid : SteeringAgent
         base.Update();
     }
 
+    protected virtual void LateUpdate()
+    {
+        if (!IsAlive) return;
+
+        if (bounds != null)
+        {
+            bounds.EnforceContainment(this);
+        }
+    }
+
     private Vector3 ComputeSteering()
     {
+        bool isIsolated = (sensor == null || sensor.Boids.Count == 0);
+        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
+
         if (TryEvade(out Vector3 evade))
         {
             IsEvading = true;
-            return evade;
+            return evade + bound * 3.5f;
         }
 
         IsEvading = false;
 
         if (TrySeekPOI(out Vector3 poi))
         {
-            return poi;
+            return poi + bound;
         }
 
-        bool isIsolated = (sensor == null || sensor.Boids.Count == 0);
         Vector3 flock = flocking.ComputeFlocking(this, sensor ? sensor.Boids : null);
-        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
 
         return flock + bound;
     }
@@ -107,7 +133,7 @@ public class Boid : SteeringAgent
     private bool TryEvade(out Vector3 force)
     {
         force = Vector3.zero;
-        if (sensor == null || sensor.Hunter == null) return false;
+        if (sensor == null || sensor.Hunter == null || sensor.Hunter.IsDead) return false;
 
         HunterNPC hunter = sensor.Hunter;
         Vector3 hPos = hunter.transform.position;
@@ -215,5 +241,18 @@ public class Boid : SteeringAgent
     private void OnRespawnCompleted()
     {
         ResetState();
+    }
+
+    protected override void OnDrawGizmosSelected()
+    {
+        base.OnDrawGizmosSelected();
+
+        if (!IsAlive) return;
+
+        if (IsEvading && sensor != null && sensor.Hunter != null)
+        {
+            Gizmos.color = new Color(1f, 0.4f, 0.1f, 0.9f);
+            Gizmos.DrawLine(transform.position, sensor.Hunter.transform.position);
+        }
     }
 }
