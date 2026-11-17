@@ -5,5 +5,8 @@ public enum HunterStateId
     Gather,
     Flee,
     Exit,
-    Dead
+    Dead,
+    Patrol,
+    Hunt,
+    Rest
 }

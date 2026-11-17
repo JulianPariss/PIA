@@ -3,7 +3,8 @@ using UnityEngine;
 
 public enum PatrolMode
 {
-    Loop
+    Loop,
+    PingPong
 }
 
 public enum HunterVisualMode
@@ -14,7 +15,8 @@ public enum HunterVisualMode
     Gather,
     Flee,
     Exit,
-    Dead
+    Dead,
+    Rest
 }
 
 [Serializable]
@@ -33,6 +35,8 @@ public class AttackData
     public float meleeDamage = 45f;
     public float rangedDamage = 30f;
     public float attackDuration = 0.35f;
+    public int meleeHits = 2;
+    public int rangedHits = 1;
 }
 
 [Serializable]

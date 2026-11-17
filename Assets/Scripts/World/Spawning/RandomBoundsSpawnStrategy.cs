@@ -18,11 +18,12 @@ public class RandomBoundsSpawnStrategy : ISpawnPositionStrategy
     public bool TryGetSpawnPosition(out Vector3 position)
     {
         position = Vector3.zero;
-        if (bounds == null) return false;
+        SimulationBounds activeBounds = bounds != null ? bounds : SimulationBounds.Instance;
+        if (activeBounds == null) return false;
 
         for (int i = 0; i < maxAttempts; i++)
         {
-            Vector3 candidate = bounds.RandomPoint(0f);
+            Vector3 candidate = activeBounds.RandomPoint(0f);
             if (obstacleMask == 0 || !Physics.CheckSphere(candidate + Vector3.up * 0.5f, clearanceRadius, obstacleMask, QueryTriggerInteraction.Ignore))
             {
                 position = candidate;
@@ -30,7 +31,7 @@ public class RandomBoundsSpawnStrategy : ISpawnPositionStrategy
             }
         }
 
-        position = bounds.Center;
+        position = activeBounds.Center;
         return true;
     }
 }

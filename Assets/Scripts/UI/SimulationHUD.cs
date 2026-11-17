@@ -45,6 +45,43 @@ public class SimulationHUD : MonoBehaviour
             }
         }
 
+        if (hunter.IsWaypointPatrolMode)
+        {
+            DrawRecuperatorioHUD();
+        }
+        else
+        {
+            DrawParcial2HUD();
+        }
+    }
+
+    private void DrawRecuperatorioHUD()
+    {
+        GUILayout.BeginArea(new Rect(10f, 10f, 320f, 165f), GUI.skin.box);
+        GUILayout.Label("Simulación - Telemetría Cazador", GUI.skin.box);
+
+        string hunterState = hunter.FSM != null ? hunter.FSM.CurrentKey.ToString() : "None";
+        GUILayout.Label($"Estado FSM: [{hunterState}] | Modo: {hunter.CurrentVisualMode}");
+        GUILayout.Label($"Energía: {hunter.Energy:0}/{hunter.MaxEnergy:0} ({Mathf.RoundToInt(hunter.EnergyNormalized * 100f)}%)");
+
+        string tba = hunter.IsTBAReady ? "Listo" : $"{hunter.AttackCooldownRemaining:0.0}s";
+        string targetName = hunter.CurrentTarget != null ? $"{hunter.CurrentTarget.name} ({hunter.CurrentTarget.Health.Current:0} HP)" : "-";
+        GUILayout.Label($"TBA: {tba} | Presa: {targetName}");
+
+        CountSensorBoids(out int aliveBoids, out int deadBoids);
+        int activePois = hunter.POISpawner != null ? hunter.POISpawner.ActiveCount : 0;
+        GUILayout.Label($"Boids Vivos: {aliveBoids} | Caídos: {deadBoids} | POIs: {activePois}/5");
+
+        if (hunter.FSM != null && hunter.FSM.CurrentKey == HunterStateId.Gather)
+        {
+            GUILayout.Label($"Progreso Recolección: {Mathf.RoundToInt(hunter.GatherProgress * 100f)}%");
+        }
+
+        GUILayout.EndArea();
+    }
+
+    private void DrawParcial2HUD()
+    {
         GUILayout.BeginArea(new Rect(10f, 10f, 320f, 200f), GUI.skin.box);
         GUILayout.Label("Simulación - Telemetría", GUI.skin.box);
 
@@ -70,29 +107,7 @@ public class SimulationHUD : MonoBehaviour
         string targetName = hunter.CurrentTarget != null ? hunter.CurrentTarget.name : "-";
         GUILayout.Label($"TBA: {tba} | Target: {targetName}");
 
-        int aliveBoids = 0;
-        int deadBoids = 0;
-        if (hunter.Sensor != null)
-        {
-            var boids = hunter.Sensor.Boids;
-            for (int i = 0; i < boids.Count; i++)
-            {
-                Boid b = boids[i];
-                if (b == null || b.isRespawning)
-                {
-                    continue;
-                }
-                if (b.IsAlive)
-                {
-                    aliveBoids++;
-                }
-                else
-                {
-                    deadBoids++;
-                }
-            }
-        }
-
+        CountSensorBoids(out int aliveBoids, out int deadBoids);
         int activePois = hunter.POISpawner != null ? hunter.POISpawner.ActiveCount : 0;
         GUILayout.Label($"Boids Vivos: {aliveBoids} | Caídos: {deadBoids} | POIs: {activePois}");
 
@@ -100,5 +115,29 @@ public class SimulationHUD : MonoBehaviour
         GUILayout.Label($"Lobos Activos: {totalWolves}");
 
         GUILayout.EndArea();
+    }
+
+    private void CountSensorBoids(out int aliveBoids, out int deadBoids)
+    {
+        aliveBoids = 0;
+        deadBoids = 0;
+
+        if (hunter.Sensor == null) return;
+
+        var boids = hunter.Sensor.Boids;
+        for (int i = 0; i < boids.Count; i++)
+        {
+            Boid b = boids[i];
+            if (b == null || b.isRespawning) continue;
+
+            if (b.IsAlive)
+            {
+                aliveBoids++;
+            }
+            else
+            {
+                deadBoids++;
+            }
+        }
     }
 }

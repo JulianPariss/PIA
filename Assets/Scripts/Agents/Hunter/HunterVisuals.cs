@@ -82,6 +82,7 @@ public class HunterVisuals : MonoBehaviour
             HunterVisualMode.Flee => new Color(1f, 0.5f, 0.1f),
             HunterVisualMode.Exit => new Color(0.75f, 0.3f, 1f),
             HunterVisualMode.Dead => new Color(0.35f, 0.35f, 0.35f),
+            HunterVisualMode.Rest => new Color(0.2f, 0.65f, 1f),
             _ => Color.white
         };
 
@@ -165,7 +166,8 @@ public class HunterVisuals : MonoBehaviour
         if (targetLine == null) return;
 
         Boid target = hunter.CurrentTarget;
-        if (target != null && !target.isRespawning && hunter.IsInVision(target))
+        bool isHuntState = hunter.FSM != null && hunter.FSM.HasState && hunter.FSM.CurrentKey == HunterStateId.Hunt;
+        if (target != null && !target.isRespawning && (isHuntState || hunter.IsInVision(target)))
         {
             targetLine.enabled = true;
             Vector3 startPos = transform.position + Vector3.up * 0.8f;

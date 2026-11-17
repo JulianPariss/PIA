@@ -24,6 +24,7 @@ public class HunterNPC : MonoBehaviour
     [SerializeField] private float safeZoneWaitTime = 3.5f;
 
     [SerializeField] private bool spawnInInitialZoneOnStart = true;
+    [SerializeField] private bool useRecuperatorioFSM = false;
 
     [FormerlySerializedAs("TBA")]
     [SerializeField] private float tba = 1.8f;
@@ -34,9 +35,20 @@ public class HunterNPC : MonoBehaviour
     [FormerlySerializedAs("MeleeAttackRadius")]
     [SerializeField] private float meleeAttackRadius = 2.5f;
 
+    [FormerlySerializedAs("Energy")]
+    [SerializeField] private float energy = 100f;
+
+    [FormerlySerializedAs("MaxEnergy")]
+    [SerializeField] private float maxEnergy = 100f;
+
+    [SerializeField] private float energyDrainRate = 8f;
+    [SerializeField] private float energyRechargeRate = 25f;
+
     private float lastAttackTime = -999f;
 
     [SerializeField] private POISpawner poiSpawner;
+    [SerializeField] private Transform[] waypoints = Array.Empty<Transform>();
+    [SerializeField] private SimulationBounds bounds;
 
     [FormerlySerializedAs("VisionRadius")]
     [SerializeField] private float visionRadius = 14f;
@@ -55,6 +67,8 @@ public class HunterNPC : MonoBehaviour
     private Rigidbody _rigidbody;
     private bool _hasPendingCapture = false;
     private bool _isHiddenOrDead = false;
+    private int currentWaypointIndex = 0;
+    private bool isPatrolReversed = false;
 
     public int RequiredGathers => Mathf.Max(1, requiredGathers);
     public int CurrentGathers { get; private set; } = 0;
@@ -69,6 +83,12 @@ public class HunterNPC : MonoBehaviour
     public float RangeAttackRadius => rangeAttackRadius;
     public float MeleeAttackRadius => meleeAttackRadius;
     public float VisionRadius => visionRadius;
+    public float Energy => energy;
+    public float MaxEnergy => Mathf.Max(1f, maxEnergy);
+    public float EnergyNormalized => Mathf.Clamp01(energy / MaxEnergy);
+    public bool IsWaypointPatrolMode => useRecuperatorioFSM || (Graph.Instance == null && (ZoneArea.AllZones == null || ZoneArea.AllZones.Count == 0));
+    public Transform[] Waypoints => waypoints;
+    public SimulationBounds Bounds => bounds;
     public float EyeHeight => eyeHeight;
     public LayerMask ObstacleMask => obstacleMask;
     public AgentSensor Sensor => sensor;
@@ -77,6 +97,9 @@ public class HunterNPC : MonoBehaviour
     public bool IsTBAReady => Time.time >= lastAttackTime + TBA;
     public float AttackCooldownRemaining => Mathf.Max(0f, (lastAttackTime + TBA) - Time.time);
     public void ResetAttackCooldown() => lastAttackTime = Time.time;
+    public void ConsumeEnergy(float deltaTime) => energy = Mathf.Max(0f, energy - (energyDrainRate * deltaTime));
+    public void RechargeEnergy(float deltaTime) => energy = Mathf.Min(MaxEnergy, energy + (energyRechargeRate * deltaTime));
+    public void ResetEnergy() => energy = MaxEnergy;
 
     public PatrolData SearchConfig => searchData;
     public AttackData AttackConfig => attackData;
@@ -179,9 +202,22 @@ public class HunterNPC : MonoBehaviour
             poiSpawner = GetComponent<POISpawner>();
         }
 
+        if (bounds == null)
+        {
+            bounds = SimulationBounds.Instance;
+        }
+
         if (!CompareTag("Hunter"))
         {
             try { gameObject.tag = "Hunter"; } catch (Exception) { }
+        }
+    }
+
+    private void OnValidate()
+    {
+        if (meleeAttackRadius >= rangeAttackRadius)
+        {
+            meleeAttackRadius = Mathf.Max(0.5f, rangeAttackRadius - 0.5f);
         }
     }
 
@@ -209,6 +245,9 @@ public class HunterNPC : MonoBehaviour
         FSM.Register(HunterStateId.Flee, new FleeState(FSM, this));
         FSM.Register(HunterStateId.Exit, new ExitState(FSM, this));
         FSM.Register(HunterStateId.Dead, new DeadState(FSM, this));
+        FSM.Register(HunterStateId.Patrol, new PatrolState(FSM, this, searchData));
+        FSM.Register(HunterStateId.Hunt, new HuntState(FSM, this, attackData));
+        FSM.Register(HunterStateId.Rest, new RestState(FSM, this));
         FSM.OnStateChanged += HandleStateChanged;
     }
 
@@ -229,6 +268,20 @@ public class HunterNPC : MonoBehaviour
     {
         CurrentGathers = 0;
         OnGathersChanged?.Invoke(CurrentGathers, RequiredGathers);
+        ResetEnergy();
+
+        if (bounds == null)
+        {
+            bounds = SimulationBounds.Instance;
+        }
+
+        lastAttackTime = -TBA;
+
+        if (IsWaypointPatrolMode)
+        {
+            FSM.ChangeState(HunterStateId.Patrol);
+            return;
+        }
 
         if (spawnInInitialZoneOnStart)
         {
@@ -239,7 +292,6 @@ public class HunterNPC : MonoBehaviour
             }
         }
 
-        lastAttackTime = -TBA;
         FSM.ChangeState(HunterStateId.Search);
     }
 
@@ -316,14 +368,70 @@ public class HunterNPC : MonoBehaviour
         HunterVisualMode mode = newState switch
         {
             HunterStateId.Search => HunterVisualMode.Search,
+            HunterStateId.Patrol => HunterVisualMode.Search,
             HunterStateId.Attack => HunterVisualMode.Pursuit,
+            HunterStateId.Hunt => HunterVisualMode.Pursuit,
             HunterStateId.Gather => HunterVisualMode.Gather,
             HunterStateId.Flee => HunterVisualMode.Flee,
             HunterStateId.Exit => HunterVisualMode.Exit,
             HunterStateId.Dead => HunterVisualMode.Dead,
+            HunterStateId.Rest => HunterVisualMode.Rest,
             _ => HunterVisualMode.Search
         };
         SetVisualMode(mode);
+    }
+
+    public Transform GetCurrentWaypoint()
+    {
+        if (waypoints == null || waypoints.Length == 0) return null;
+
+        int checkedCount = 0;
+        while (checkedCount < waypoints.Length)
+        {
+            if (currentWaypointIndex >= waypoints.Length) currentWaypointIndex = 0;
+            if (currentWaypointIndex < 0) currentWaypointIndex = waypoints.Length - 1;
+
+            if (waypoints[currentWaypointIndex] != null)
+            {
+                return waypoints[currentWaypointIndex];
+            }
+
+            AdvanceToNextWaypoint(searchData.mode);
+            checkedCount++;
+        }
+
+        return null;
+    }
+
+    public void AdvanceToNextWaypoint(PatrolMode mode)
+    {
+        if (waypoints == null || waypoints.Length <= 1) return;
+
+        if (mode == PatrolMode.Loop)
+        {
+            currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+        }
+        else
+        {
+            if (isPatrolReversed)
+            {
+                currentWaypointIndex--;
+                if (currentWaypointIndex <= 0)
+                {
+                    currentWaypointIndex = 0;
+                    isPatrolReversed = false;
+                }
+            }
+            else
+            {
+                currentWaypointIndex++;
+                if (currentWaypointIndex >= waypoints.Length - 1)
+                {
+                    currentWaypointIndex = waypoints.Length - 1;
+                    isPatrolReversed = true;
+                }
+            }
+        }
     }
 
     public void TeleportToInitialZone()
@@ -400,6 +508,20 @@ public class HunterNPC : MonoBehaviour
             Vector3 to = DetectedWolf.transform.position + Vector3.up * eyeHeight;
             Gizmos.DrawLine(from, to);
             Gizmos.DrawWireSphere(to, 0.35f);
+        }
+
+        if (waypoints != null && waypoints.Length > 1)
+        {
+            Gizmos.color = Color.green;
+            for (int i = 0; i < waypoints.Length; i++)
+            {
+                if (waypoints[i] == null) continue;
+                int nextIndex = (i + 1) % waypoints.Length;
+                if (waypoints[nextIndex] != null)
+                {
+                    Gizmos.DrawLine(waypoints[i].position, waypoints[nextIndex].position);
+                }
+            }
         }
     }
 }
