@@ -28,31 +28,36 @@ public class GatherState : State<HunterStateId>
         if (target == null || !target.isDead || target.isRespawning)
         {
             hunter.CurrentTarget = null;
-            fsm.ChangeState(HunterStateId.Search);
+            fsm.ChangeState(hunter.IsWaypointPatrolMode ? HunterStateId.Patrol : HunterStateId.Search);
         }
     }
 
     public override void Tick()
     {
-        if (hunter.TryConsumePendingCapture())
-        {
-            hunter.CurrentTarget = null;
-            fsm.ChangeState(HunterStateId.Dead);
-            return;
-        }
+        bool waypointMode = hunter.IsWaypointPatrolMode;
 
-        if (hunter.ShouldFleeFromWolf())
+        if (!waypointMode)
         {
-            hunter.CurrentTarget = null;
-            fsm.ChangeState(HunterStateId.Flee);
-            return;
+            if (hunter.TryConsumePendingCapture())
+            {
+                hunter.CurrentTarget = null;
+                fsm.ChangeState(HunterStateId.Dead);
+                return;
+            }
+
+            if (hunter.ShouldFleeFromWolf())
+            {
+                hunter.CurrentTarget = null;
+                fsm.ChangeState(HunterStateId.Flee);
+                return;
+            }
         }
 
         Boid target = hunter.CurrentTarget;
         if (target == null || !target.isDead || target.isRespawning || !target.gameObject.activeInHierarchy)
         {
             hunter.CurrentTarget = null;
-            fsm.ChangeState(HunterStateId.Search);
+            fsm.ChangeState(waypointMode ? HunterStateId.Patrol : HunterStateId.Search);
             return;
         }
 
@@ -72,7 +77,15 @@ public class GatherState : State<HunterStateId>
                 gatherTimer = 0f;
             }
 
-            if (hunter.NavAgent != null)
+            if (waypointMode)
+            {
+                Vector3 seekTarget = target.transform.position;
+                seekTarget.y = hunter.transform.position.y;
+                Vector3 seekForce = SteeringBehaviors.Seek(hunter.Agent, seekTarget);
+                seekForce.y = 0f;
+                hunter.Agent.ApplyForce(seekForce);
+            }
+            else if (hunter.NavAgent != null)
             {
                 hunter.NavAgent.NavigateToPosition(target.transform.position, useArriveAtEnd: true);
             }
@@ -80,7 +93,10 @@ public class GatherState : State<HunterStateId>
             if (gatherTimer <= 0f) return;
         }
 
-        hunter.NavAgent?.StopNavigation();
+        if (!waypointMode)
+        {
+            hunter.NavAgent?.StopNavigation();
+        }
         hunter.Agent.Stop();
         if (hunter.Agent.Velocity.sqrMagnitude < 1.0f)
         {
@@ -112,7 +128,11 @@ public class GatherState : State<HunterStateId>
 
             hunter.CurrentTarget = null;
 
-            if (hunter.HasCompletedRequiredGathers)
+            if (waypointMode)
+            {
+                fsm.ChangeState(HunterStateId.Patrol);
+            }
+            else if (hunter.HasCompletedRequiredGathers)
             {
                 fsm.ChangeState(HunterStateId.Exit);
             }

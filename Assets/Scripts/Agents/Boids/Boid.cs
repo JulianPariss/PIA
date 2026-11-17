@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using PIA1.UI;
 
 public enum BoidLifeState
 {
@@ -30,9 +31,15 @@ public class Boid : SteeringAgent
     [Range(0.1f, 1f)]
     [SerializeField] private float poiSeparationDamping = 0.6f;
 
+    [Header("Anti-Superposición")]
+    [SerializeField] private float minSeparationDistance = 1.15f;
+    [SerializeField] private float poiMinDistance = 1.35f;
+
     private BoidLifeState lifeState = BoidLifeState.Alive;
     private float lastPOIDamageTime;
+    private bool _exitedBoundsThisHunt;
 
+    public StateMachine<BoidStateId> FSM { get; private set; }
     public bool IsEvading { get; private set; }
     public BoidLifeState LifeState => lifeState;
     public bool IsAlive => lifeState == BoidLifeState.Alive;
@@ -43,6 +50,8 @@ public class Boid : SteeringAgent
     public bool isRespawning => IsRespawning;
     public Health Health => health;
     public AgentSensor Sensor => sensor;
+    public FlockingBehaviour Flocking => flocking;
+    public BoidRespawner Respawner => respawner;
 
     public event Action<Boid> OnCollected;
 
@@ -65,7 +74,24 @@ public class Boid : SteeringAgent
             gameObject.AddComponent<WorldHealthBar>();
         }
 
+        if (!TryGetComponent<BoidStateLabel>(out _))
+        {
+            gameObject.AddComponent<BoidStateLabel>();
+        }
+
         health.OnDied += Die;
+        InitializeFSM();
+    }
+
+    private void InitializeFSM()
+    {
+        FSM = new StateMachine<BoidStateId>();
+        FSM.Register(BoidStateId.Flocking, new BoidFlockingState(FSM, this));
+        FSM.Register(BoidStateId.SeekObject, new BoidSeekObjectState(FSM, this));
+        FSM.Register(BoidStateId.Consume, new BoidConsumeState(FSM, this));
+        FSM.Register(BoidStateId.Evade, new BoidEvadeState(FSM, this));
+        FSM.Register(BoidStateId.Dead, new BoidDeadState(FSM, this));
+        FSM.Register(BoidStateId.Respawn, new BoidRespawnState(FSM, this));
     }
 
     protected virtual void OnDestroy()
@@ -87,13 +113,19 @@ public class Boid : SteeringAgent
         {
             velocity = transform.forward * (MaxSpeed * 0.5f);
         }
+
+        if (FSM != null && !FSM.HasState)
+        {
+            FSM.ChangeState(BoidStateId.Flocking);
+        }
     }
 
     protected override void Update()
     {
+        FSM?.Tick();
+
         if (!IsAlive) return;
 
-        ApplyForce(ComputeSteering());
         base.Update();
     }
 
@@ -101,82 +133,112 @@ public class Boid : SteeringAgent
     {
         if (!IsAlive) return;
 
+        ResolveAntiOverlap();
+
         if (bounds != null)
         {
             bounds.EnforceContainment(this);
         }
     }
 
-    private Vector3 ComputeSteering()
+    public void SetEvading(bool evading)
     {
-        bool isIsolated = (sensor == null || sensor.Boids.Count == 0);
-        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
-
-        if (TryEvade(out Vector3 evade))
-        {
-            IsEvading = true;
-            return evade + bound * 3.5f;
-        }
-
-        IsEvading = false;
-
-        if (TrySeekPOI(out Vector3 poi))
-        {
-            return poi + bound;
-        }
-
-        Vector3 flock = flocking.ComputeFlocking(this, sensor ? sensor.Boids : null);
-
-        return flock + bound;
+        IsEvading = evading;
     }
 
-    private bool TryEvade(out Vector3 force)
+    public bool HasThreatInVision()
     {
-        force = Vector3.zero;
-        if (sensor == null || sensor.Hunter == null || sensor.Hunter.IsDead) return false;
+        return sensor != null && sensor.Hunter != null && !sensor.Hunter.IsDead;
+    }
+
+    public bool TryGetTargetPOI(out PointOfInterest poi)
+    {
+        poi = GetNearestLocalPOI();
+        return poi != null;
+    }
+
+    public bool IsWithinConsumeRadius(PointOfInterest poi)
+    {
+        if (poi == null) return false;
+
+        Vector3 toPOI = poi.transform.position - transform.position;
+        toPOI.y = 0f;
+        return toPOI.sqrMagnitude <= poiInteractionRadius * poiInteractionRadius;
+    }
+
+    public void ApplyFlockingSteering()
+    {
+        bool isIsolated = sensor == null || sensor.Boids.Count == 0;
+        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
+        Vector3 flock = flocking.ComputeFlocking(this, sensor ? sensor.Boids : null);
+        ApplyForce(flock + bound);
+    }
+
+    public void ApplyEvadeSteering()
+    {
+        if (!HasThreatInVision()) return;
+
+        bool isIsolated = sensor == null || sensor.Boids.Count == 0;
+        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
 
         HunterNPC hunter = sensor.Hunter;
         Vector3 hPos = hunter.transform.position;
         hPos.y = transform.position.y;
         Vector3 hVel = hunter.Agent ? hunter.Agent.Velocity : Vector3.zero;
 
-        force = (SteeringBehaviors.Evade(this, hPos, hVel) * evadeWeight) +
-                flocking.ComputeSeparationOnly(this, sensor.Boids);
+        Vector3 force = (SteeringBehaviors.Evade(this, hPos, hVel) * evadeWeight) +
+                        flocking.ComputeSeparationOnly(this, sensor.Boids);
 
-        return true;
+        ApplyForce(force + bound * 3.5f);
     }
 
-    private bool TrySeekPOI(out Vector3 force)
+    public void ApplySeekPOISteering(PointOfInterest poi)
     {
-        force = Vector3.zero;
-        PointOfInterest poi = GetNearestLocalPOI();
-        if (poi == null) return false;
+        if (poi == null) return;
+
+        bool isIsolated = sensor == null || sensor.Boids.Count == 0;
+        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
+
+        Vector3 force = SteeringBehaviors.Arrive(this, poi.transform.position, poiSlowingRadius) * poiWeight +
+                        flocking.ComputeSeparationOnly(this, sensor ? sensor.Boids : null) * poiSeparationDamping;
+
+        ApplyForce(force + bound);
+    }
+
+    public void ConsumePOI(PointOfInterest poi)
+    {
+        if (poi == null) return;
 
         Vector3 toPOI = poi.transform.position - transform.position;
         toPOI.y = 0f;
+        float distSqr = toPOI.sqrMagnitude;
 
-        if (toPOI.sqrMagnitude <= poiInteractionRadius * poiInteractionRadius)
+        Stop();
+
+        if (sensor != null && flocking != null)
         {
-            Stop();
-
-            if (toPOI.sqrMagnitude > 0.001f)
-            {
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toPOI.normalized), RotationSpeed * Time.deltaTime);
-            }
-
-            if (Time.time >= lastPOIDamageTime + poiDamageInterval)
-            {
-                poi.TakeDamage(poiDamageAmount);
-                lastPOIDamageTime = Time.time;
-            }
-
-            return true;
+            ApplyForce(flocking.ComputeSeparationOnly(this, sensor.Boids) * poiSeparationDamping);
         }
 
-        force = SteeringBehaviors.Arrive(this, poi.transform.position, poiSlowingRadius) * poiWeight +
-                flocking.ComputeSeparationOnly(this, sensor.Boids) * poiSeparationDamping;
+        if (distSqr < poiMinDistance * poiMinDistance && distSqr > 0.0001f)
+        {
+            Vector3 pushOut = (-toPOI / Mathf.Sqrt(distSqr)) * MaxSteering * 0.5f;
+            ApplyForce(pushOut);
+        }
 
-        return true;
+        if (distSqr > 0.001f)
+        {
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                Quaternion.LookRotation(toPOI.normalized),
+                RotationSpeed * Time.deltaTime);
+        }
+
+        if (Time.time >= lastPOIDamageTime + poiDamageInterval)
+        {
+            poi.TakeDamage(poiDamageAmount);
+            lastPOIDamageTime = Time.time;
+        }
     }
 
     private PointOfInterest GetNearestLocalPOI()
@@ -204,9 +266,73 @@ public class Boid : SteeringAgent
         return nearest;
     }
 
+    private void ResolveAntiOverlap()
+    {
+        if (sensor == null) return;
+
+        Vector3 pos = transform.position;
+        float minBoidSqr = minSeparationDistance * minSeparationDistance;
+        var neighbors = sensor.Boids;
+
+        for (int i = 0; i < neighbors.Count; i++)
+        {
+            Boid other = neighbors[i];
+            if (other == null || other == this || !other.IsAlive) continue;
+
+            Vector3 diff = pos - other.transform.position;
+            diff.y = 0f;
+            float sqr = diff.sqrMagnitude;
+
+            if (sqr < minBoidSqr && sqr > 0.00001f)
+            {
+                float dist = Mathf.Sqrt(sqr);
+                float overlap = (minSeparationDistance - dist) * 0.5f;
+                Vector3 correction = (diff / dist) * overlap;
+                ApplySafePositionOffset(correction);
+                pos = transform.position;
+            }
+        }
+
+        if (TryGetTargetPOI(out PointOfInterest poi))
+        {
+            Vector3 diffPOI = pos - poi.transform.position;
+            diffPOI.y = 0f;
+            float sqrPOI = diffPOI.sqrMagnitude;
+
+            if (sqrPOI < poiMinDistance * poiMinDistance && sqrPOI > 0.00001f)
+            {
+                float distPOI = Mathf.Sqrt(sqrPOI);
+                Vector3 correction = (diffPOI / distPOI) * (poiMinDistance - distPOI);
+                ApplySafePositionOffset(correction);
+            }
+        }
+    }
+
+    private void ApplySafePositionOffset(Vector3 offset)
+    {
+        offset.y = 0f;
+        Vector3 candidate = transform.position + offset;
+
+        if (obstacleMask != 0 &&
+            Physics.CheckSphere(candidate, bodyRadius * 0.85f, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+
+        transform.position = candidate;
+    }
+
     public void TakeDamage(float amount)
     {
         health.TakeDamage(amount);
+    }
+
+    public void TakeHits(int hits)
+    {
+        if (!IsAlive || hits <= 0) return;
+
+        float damagePerHit = health.Max * 0.5f;
+        health.TakeDamage(damagePerHit * hits);
     }
 
     public void StartDelayedRespawn()
@@ -218,6 +344,7 @@ public class Boid : SteeringAgent
     {
         lifeState = BoidLifeState.Dead;
         ResetMotion();
+        FSM?.ChangeState(BoidStateId.Dead);
     }
 
     public void Collect()
@@ -228,19 +355,45 @@ public class Boid : SteeringAgent
         ResetMotion();
         sensor?.Clear();
         OnCollected?.Invoke(this);
+        FSM?.ChangeState(BoidStateId.Respawn);
+    }
+
+    public void StartRespawnSequence()
+    {
+        ResetMotion();
+        sensor?.Clear();
         respawner.BeginRespawn(OnRespawnCompleted);
     }
 
     public void ResetState()
     {
         lifeState = BoidLifeState.Alive;
+        _exitedBoundsThisHunt = false;
         health.ResetHealth();
         ResetMotion();
+        FSM?.ChangeState(BoidStateId.Flocking);
     }
 
     private void OnRespawnCompleted()
     {
         ResetState();
+    }
+
+    public void NotifyExitedBounds()
+    {
+        _exitedBoundsThisHunt = true;
+    }
+
+    public void ClearBoundsExitFlag()
+    {
+        _exitedBoundsThisHunt = false;
+    }
+
+    public bool ConsumeBoundsExitFlag()
+    {
+        if (!_exitedBoundsThisHunt) return false;
+        _exitedBoundsThisHunt = false;
+        return true;
     }
 
     protected override void OnDrawGizmosSelected()

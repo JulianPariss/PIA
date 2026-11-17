@@ -41,11 +41,17 @@ namespace PIA1.UI
                 _ => hunter.CurrentGathers
             };
 
+            int energyPct = Mathf.RoundToInt(hunter.EnergyNormalized * 100f);
             Boid activeTarget = (hunter.CurrentTarget != null && !hunter.CurrentTarget.isRespawning) ? hunter.CurrentTarget : null;
             string safeName = hunter.ChosenSafeZone != null ? hunter.ChosenSafeZone.ZoneName : string.Empty;
 
             string stateText = state switch
             {
+                HunterStateId.Patrol => $"PATRULLA | E: {energyPct}%",
+                HunterStateId.Hunt => hunter.CurrentVisualMode == HunterVisualMode.Attack
+                    ? $"ATAQUE | E: {energyPct}%"
+                    : $"CAZA | E: {energyPct}%",
+                HunterStateId.Rest => $"DESCANSO {energyPct}%",
                 HunterStateId.Attack => "ATAQUE",
                 HunterStateId.Gather => $"RECOLECCIÓN {auxInt}%",
                 HunterStateId.Flee => hunter.IsWaitingInSafeZone
@@ -60,6 +66,10 @@ namespace PIA1.UI
 
             color = state switch
             {
+                HunterStateId.Hunt => hunter.CurrentVisualMode == HunterVisualMode.Attack
+                    ? new Color(1f, 0.25f, 0.25f)
+                    : new Color(0.1f, 0.85f, 0.75f),
+                HunterStateId.Rest => new Color(0.35f, 0.75f, 1f),
                 HunterStateId.Attack => new Color(1f, 0.25f, 0.25f),
                 HunterStateId.Gather => new Color(1f, 0.88f, 0.1f),
                 HunterStateId.Flee => new Color(1f, 0.55f, 0.1f),

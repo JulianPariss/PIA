@@ -161,6 +161,7 @@ public class SimulationBounds : MonoBehaviour
                 Vector3 safeSpawn = RandomPoint(pos.y);
                 boid.transform.position = safeSpawn;
                 boid.ResetMotion();
+                boid.NotifyExitedBounds();
                 Physics.SyncTransforms();
                 return;
             }
@@ -233,6 +234,7 @@ public class SimulationBounds : MonoBehaviour
         if (modified)
         {
             boid.transform.position = pos;
+            boid.NotifyExitedBounds();
             Physics.SyncTransforms();
         }
     }
