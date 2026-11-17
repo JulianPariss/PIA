@@ -93,48 +93,51 @@ public class SimulationBounds : MonoBehaviour
         float minZ = center.z - halfZ;
         float maxZ = center.z + halfZ;
 
-        if (pos.x < minX || pos.x > maxX || pos.z < minZ || pos.z > maxZ)
+        if (softMargin > 0.01f)
         {
-            Vector3 directSeek = SteeringBehaviors.Seek(agent, center);
-            directSeek.y = 0f;
-            return directSeek * (boundaryWeight * 2.5f);
-        }
+            if (pos.x < minX || pos.x > maxX || pos.z < minZ || pos.z > maxZ)
+            {
+                Vector3 directSeek = SteeringBehaviors.Seek(agent, center);
+                directSeek.y = 0f;
+                return directSeek * (boundaryWeight * 2.5f);
+            }
 
-        Vector3 steeringForce = Vector3.zero;
+            Vector3 steeringForce = Vector3.zero;
 
-        float distToMinX = pos.x - minX;
-        float distToMaxX = maxX - pos.x;
+            float distToMinX = pos.x - minX;
+            float distToMaxX = maxX - pos.x;
 
-        if (distToMinX < softMargin)
-        {
-            float factor = 1f - (distToMinX / softMargin);
-            steeringForce += Vector3.right * (factor * factor);
-        }
-        else if (distToMaxX < softMargin)
-        {
-            float factor = 1f - (distToMaxX / softMargin);
-            steeringForce += Vector3.left * (factor * factor);
-        }
+            if (distToMinX < softMargin)
+            {
+                float factor = 1f - (distToMinX / softMargin);
+                steeringForce += Vector3.right * (factor * factor);
+            }
+            else if (distToMaxX < softMargin)
+            {
+                float factor = 1f - (distToMaxX / softMargin);
+                steeringForce += Vector3.left * (factor * factor);
+            }
 
-        float distToMinZ = pos.z - minZ;
-        float distToMaxZ = maxZ - pos.z;
+            float distToMinZ = pos.z - minZ;
+            float distToMaxZ = maxZ - pos.z;
 
-        if (distToMinZ < softMargin)
-        {
-            float factor = 1f - (distToMinZ / softMargin);
-            steeringForce += Vector3.forward * (factor * factor);
-        }
-        else if (distToMaxZ < softMargin)
-        {
-            float factor = 1f - (distToMaxZ / softMargin);
-            steeringForce += Vector3.back * (factor * factor);
-        }
+            if (distToMinZ < softMargin)
+            {
+                float factor = 1f - (distToMinZ / softMargin);
+                steeringForce += Vector3.forward * (factor * factor);
+            }
+            else if (distToMaxZ < softMargin)
+            {
+                float factor = 1f - (distToMaxZ / softMargin);
+                steeringForce += Vector3.back * (factor * factor);
+            }
 
-        if (steeringForce.sqrMagnitude > 0.0001f)
-        {
-            Vector3 desiredVelocity = SteeringBehaviors.DesiredVelocity(agent, steeringForce);
-            desiredVelocity.y = 0f;
-            return SteeringBehaviors.Steer(agent, desiredVelocity) * boundaryWeight;
+            if (steeringForce.sqrMagnitude > 0.0001f)
+            {
+                Vector3 desiredVelocity = SteeringBehaviors.DesiredVelocity(agent, steeringForce);
+                desiredVelocity.y = 0f;
+                return SteeringBehaviors.Steer(agent, desiredVelocity) * boundaryWeight;
+            }
         }
 
         if (isIsolated)
@@ -246,11 +249,14 @@ public class SimulationBounds : MonoBehaviour
         Gizmos.color = boundsColor;
         Gizmos.DrawWireCube(center, new Vector3(size.x, 1f, size.z));
 
-        Color innerColor = boundsColor;
-        innerColor.a *= 0.5f;
-        Gizmos.color = innerColor;
-        float innerX = Mathf.Max(0.5f, size.x - softMargin * 2f);
-        float innerZ = Mathf.Max(0.5f, size.z - softMargin * 2f);
-        Gizmos.DrawWireCube(center, new Vector3(innerX, 1f, innerZ));
+        if (softMargin > 0.01f)
+        {
+            Color innerColor = boundsColor;
+            innerColor.a *= 0.5f;
+            Gizmos.color = innerColor;
+            float innerX = Mathf.Max(0.5f, size.x - softMargin * 2f);
+            float innerZ = Mathf.Max(0.5f, size.z - softMargin * 2f);
+            Gizmos.DrawWireCube(center, new Vector3(innerX, 1f, innerZ));
+        }
     }
 }

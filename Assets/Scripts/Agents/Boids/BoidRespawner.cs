@@ -11,17 +11,27 @@ public class BoidRespawner : RespawnController
     {
         base.Awake();
 
-        if (bounds == null)
-        {
-            bounds = SimulationBounds.Instance;
-        }
-
         if (obstacleMask == 0)
         {
             int obstacleLayer = LayerMask.NameToLayer("Obstacle");
             if (obstacleLayer >= 0) obstacleMask = 1 << obstacleLayer;
         }
 
-        spawnStrategy = new RandomBoundsSpawnStrategy(bounds ?? SimulationBounds.Instance, obstacleMask, checkRadius, maxSpawnAttempts);
+        EnsureSpawnStrategy();
+    }
+
+    private void Start()
+    {
+        EnsureSpawnStrategy();
+    }
+
+    private void EnsureSpawnStrategy()
+    {
+        if (bounds == null)
+        {
+            bounds = SimulationBounds.Instance;
+        }
+
+        spawnStrategy = new RandomBoundsSpawnStrategy(bounds, obstacleMask, checkRadius, maxSpawnAttempts);
     }
 }

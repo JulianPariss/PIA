@@ -66,7 +66,7 @@ public class Boid : SteeringAgent
 
         if (sensor && flocking)
         {
-            sensor.SetRadius(Mathf.Max(flocking.AlignmentRadius, flocking.CohesionRadius));
+            sensor.SetRadius(flocking.VisionRadius);
         }
 
         if (!TryGetComponent<WorldHealthBar>(out _))
@@ -178,8 +178,7 @@ public class Boid : SteeringAgent
     {
         if (!HasThreatInVision()) return;
 
-        bool isIsolated = sensor == null || sensor.Boids.Count == 0;
-        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, isIsolated) : Vector3.zero;
+        Vector3 bound = bounds ? bounds.ComputeContainmentForce(this, boundaryWeight, false) : Vector3.zero;
 
         HunterNPC hunter = sensor.Hunter;
         Vector3 hPos = hunter.transform.position;

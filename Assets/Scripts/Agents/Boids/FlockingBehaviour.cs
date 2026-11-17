@@ -7,6 +7,7 @@ public class FlockingBehaviour : MonoBehaviour
     [SerializeField] private float separationRadius = 2.5f;
     [SerializeField] private float alignmentRadius = 6f;
     [SerializeField] private float cohesionRadius = 6f;
+    [SerializeField] private float visionRadius = 9.5f;
 
     [Header("Pesos Ponderados")]
     [Range(0f, 3f)]
@@ -26,17 +27,18 @@ public class FlockingBehaviour : MonoBehaviour
     [SerializeField] private Color cohesionColor = new Color(0.25f, 1f, 0.45f, 0.55f);
     [SerializeField] private Color visionColor = new Color(1f, 0.92f, 0.016f, 0.4f);
 
-    private AgentSensor cachedSensor;
+    private Boid cachedBoid;
 
     public float SeparationRadius => separationRadius;
     public float AlignmentRadius => alignmentRadius;
     public float CohesionRadius => cohesionRadius;
+    public float VisionRadius => Mathf.Max(visionRadius, Mathf.Max(alignmentRadius, cohesionRadius));
     public bool ShowGizmos { get => showGizmos; set => showGizmos = value; }
     public bool ShowOnlyWhenSelected { get => showOnlyWhenSelected; set => showOnlyWhenSelected = value; }
 
     private void Awake()
     {
-        cachedSensor = GetComponentInChildren<AgentSensor>();
+        cachedBoid = GetComponent<Boid>();
     }
 
     private void OnValidate()
@@ -48,6 +50,11 @@ public class FlockingBehaviour : MonoBehaviour
         if (separationRadius >= cohesionRadius)
         {
             separationRadius = Mathf.Max(0.5f, cohesionRadius - 0.5f);
+        }
+        float minVision = Mathf.Max(alignmentRadius, cohesionRadius);
+        if (visionRadius < minVision)
+        {
+            visionRadius = minVision;
         }
     }
 
@@ -197,6 +204,11 @@ public class FlockingBehaviour : MonoBehaviour
 
     private void DrawFlockingGizmosInternal()
     {
+        if (Application.isPlaying && cachedBoid != null && (!cachedBoid.IsAlive || cachedBoid.IsRespawning))
+        {
+            return;
+        }
+
         Vector3 pos = transform.position;
 
         Gizmos.color = separationColor;
@@ -209,11 +221,7 @@ public class FlockingBehaviour : MonoBehaviour
         Gizmos.DrawWireSphere(pos, cohesionRadius);
 
         float maxFlock = Mathf.Max(alignmentRadius, cohesionRadius);
-        if (cachedSensor == null)
-        {
-            cachedSensor = GetComponentInChildren<AgentSensor>();
-        }
-        float visRadius = cachedSensor != null ? cachedSensor.Radius : maxFlock;
+        float visRadius = Mathf.Max(visionRadius, maxFlock);
 
         Gizmos.color = visionColor;
         Gizmos.DrawWireSphere(pos, visRadius);

@@ -387,13 +387,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.60876137, y: 0, z: 0, w: 0.7933534}
-  m_LocalPosition: {x: 0, y: 67.9, z: -17.4}
+  m_LocalRotation: {x: 0.5735764, y: 0, z: 0, w: 0.8191521}
+  m_LocalPosition: {x: 0, y: 53.82, z: -27.44}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 75, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 70, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -685,8 +685,8 @@ MonoBehaviour:
   center: {x: 0, y: 0, z: 0}
   size: {x: 55, y: 1, z: 50}
   boundaryMode: 1
-  softMargin: 1.5
-  enableEmergencyRescue: 1
+  softMargin: 0
+  enableEmergencyRescue: 0
   showGizmos: 1
   boundsColor: {r: 0.1, g: 0.95, b: 0.35, a: 0.45}
 --- !u!4 &601164130
@@ -1171,29 +1171,13 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: useRecuperatorioFSM
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: spawnInInitialZoneOnStart
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: tba
       value: 1.8
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: rangeAttackRadius
-      value: 8
-      objectReference: {fileID: 0}
-    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: meleeAttackRadius
-      value: 2.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: visionRadius
-      value: 15
-      objectReference: {fileID: 0}
+      propertyPath: bounds
+      value: 
+      objectReference: {fileID: 601164129}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: energy
       value: 100
@@ -1203,7 +1187,19 @@ PrefabInstance:
       value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: visionRadius
+      value: 15
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: energyDrainRate
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: meleeAttackRadius
+      value: 2.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: rangeAttackRadius
       value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
@@ -1211,16 +1207,8 @@ PrefabInstance:
       value: 25
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: bounds
-      value: 
-      objectReference: {fileID: 601164129}
-    - target: {fileID: 6089339490563274241, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: spawnInterval
-      value: 6
-      objectReference: {fileID: 0}
-    - target: {fileID: 6089339490563274241, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
-      propertyPath: maxActivePOIs
-      value: 5
+      propertyPath: useRecuperatorioFSM
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
       propertyPath: waypoints.Array.size
@@ -1250,6 +1238,18 @@ PrefabInstance:
       propertyPath: 'waypoints.Array.data[5]'
       value: 
       objectReference: {fileID: 1810610152}
+    - target: {fileID: 5045112830788790895, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: spawnInInitialZoneOnStart
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6089339490563274241, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: maxActivePOIs
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6089339490563274241, guid: 06e229bda2e21a146827ad7db29205b7, type: 3}
+      propertyPath: spawnInterval
+      value: 6
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

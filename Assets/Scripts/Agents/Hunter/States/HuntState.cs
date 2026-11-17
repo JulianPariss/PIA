@@ -144,6 +144,15 @@ public class HuntState : State<HunterStateId>
 
         Vector3 targetPos = lastKnownPosition;
         targetPos.y = hunter.transform.position.y;
+        Vector3 toLkp = targetPos - hunter.transform.position;
+        toLkp.y = 0f;
+
+        if (toLkp.sqrMagnitude <= 0.36f)
+        {
+            hunter.Agent.Stop();
+            return;
+        }
+
         Vector3 seekForce = SteeringBehaviors.Seek(hunter.Agent, targetPos);
         seekForce.y = 0f;
         hunter.Agent.ApplyForce(seekForce);
